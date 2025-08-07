@@ -1,0 +1,29 @@
+# <type>: <subject>
+#
+# <body>
+#
+# <footer>
+
+# Type can be:
+# feat     (new feature)
+# fix      (bug fix)
+# docs     (documentation)
+# style    (formatting, missing semi colons, etc; no code change)
+# refactor (refactoring production code)
+# test     (adding tests, refactoring test; no production code change)
+# chore    (updating build tasks, package manager configs, etc; no production code change)
+
+# Subject line rules:
+# - Use imperative mood ("Add feature" not "Added feature")
+# - Don't capitalize first letter
+# - No dot (.) at the end
+# - Limit to 50 characters
+
+# Body rules:
+# - Wrap at 72 characters
+# - Use imperative mood
+# - Include motivation for the change and contrasts with previous behavior
+
+# Footer rules:
+# - Reference issues and pull requests liberally
+# - Use "Fixes #123" or "Closes #123" for issues
