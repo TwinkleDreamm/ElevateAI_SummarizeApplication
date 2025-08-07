@@ -1,0 +1,70 @@
+# Core dependencies
+streamlit>=1.28.0
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-openai>=0.1.0
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# Audio/Video processing (optional)
+# moviepy>=1.0.3  # Commented out due to dependency conflicts
+ffmpeg-python>=0.2.0
+# openai-whisper>=20231117  # Optional
+noisereduce>=3.0.0
+librosa>=0.10.0
+soundfile>=0.12.1
+
+# Text processing
+spacy>=3.7.0
+nltk>=3.8.1
+pdfplumber>=0.10.0
+python-docx>=1.1.0
+beautifulsoup4>=4.12.0
+newspaper3k>=0.2.8
+language-tool-python>=2.7.1
+
+# Vector database and embeddings
+faiss-cpu>=1.7.4
+sentence-transformers>=2.2.2
+chromadb>=1.0.0
+
+# Web scraping and search
+requests>=2.31.0
+google-search-results>=2.4.2
+googlesearch-python>=1.2.3
+selenium>=4.15.0
+
+# Utilities
+pydantic>=2.5.0
+tqdm>=4.66.0
+numpy>=1.24.0,<2.0.0  # Keep numpy 1.x for compatibility
+pandas>=2.1.0
+scipy>=1.7.0,<1.14.0  # Compatible with gensim
+matplotlib>=3.7.0
+seaborn>=0.12.0
+pillow>=10.0.0
+pyyaml>=6.0
+click>=8.1.0
+rich>=13.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+
+# Development tools
+black>=23.0.0
+isort>=5.12.0
+flake8>=6.0.0
+# mypy>=1.7.0  # Optional
+
+# System Requirements:
+# - Java 17+ (Java 21 recommended) for LanguageTool
+#   Download from: https://adoptium.net/temurin/releases/
+# - FFmpeg for audio/video processing
+#   Download from: https://ffmpeg.org/download.html
+
+# Optional dependencies (uncomment if needed):
+# torch>=2.0.0    # For advanced ML models
+# tensorflow>=2.13.0  # Alternative ML framework
+# whisper>=1.0.0  # For local speech-to-text
