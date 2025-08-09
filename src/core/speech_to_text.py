@@ -57,15 +57,15 @@ class SpeechToTextProcessor(BaseProcessor):
         self.log_processing_start("Speech-to-text conversion", str(audio_path))
         
         try:
-            # Choose STT method based on availability and configuration
-            use_openai = kwargs.get('use_openai_api', False)
-            
-            if use_openai and OPENAI_AVAILABLE and self.settings.openai_api_key:
+            # Prioritize OpenAI API (online, no local model download)
+            if OPENAI_AVAILABLE and self.settings.openai_api_key:
+                self.logger.info("🌐 Using OpenAI Whisper API (online)")
                 result = self._transcribe_with_openai_api(audio_path, **kwargs)
             elif WHISPER_AVAILABLE:
+                self.logger.warning("⚠️ Using local Whisper model (will download ~244MB on first use)")
                 result = self._transcribe_with_whisper(audio_path, **kwargs)
             else:
-                raise SpeechToTextError("No speech-to-text engine available")
+                raise SpeechToTextError("No speech-to-text engine available. Please configure OpenAI API key for online transcription.")
             
             self.log_processing_end("Speech-to-text conversion")
             return result

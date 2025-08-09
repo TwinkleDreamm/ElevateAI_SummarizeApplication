@@ -43,10 +43,10 @@ class Reranker:
         self.settings = settings
         self.logger = logger
         
-        # Reranking parameters
-        self.use_cross_encoder = self.config.get('use_cross_encoder', False)
+        # Reranking parameters - Disable heavy models by default
+        self.use_cross_encoder = self.config.get('use_cross_encoder', False)  # Keep disabled for performance
         self.cross_encoder_model = self.config.get(
-            'cross_encoder_model', 
+            'cross_encoder_model',
             'cross-encoder/ms-marco-MiniLM-L-6-v2'
         )
         
@@ -63,8 +63,14 @@ class Reranker:
     
     def _load_cross_encoder(self) -> None:
         """Load cross-encoder model for reranking."""
+        if not self.use_cross_encoder:
+            self.logger.info("🚀 Cross-encoder disabled for better performance")
+            self.cross_encoder = None
+            return
+
         try:
-            self.logger.info(f"Loading cross-encoder model: {self.cross_encoder_model}")
+            self.logger.warning(f"⚠️ Loading cross-encoder model: {self.cross_encoder_model} (~90MB)")
+            self.logger.warning("This will download model on first use...")
             self.cross_encoder = CrossEncoder(self.cross_encoder_model)
             self.logger.info("Cross-encoder model loaded successfully")
         except Exception as e:

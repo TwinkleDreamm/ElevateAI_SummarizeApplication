@@ -42,9 +42,9 @@ class EmbeddingGenerator:
         self.settings = settings
         self.logger = logger
         
-        # Model configuration
-        self.model_name = self.config.get('model_name', settings.embedding_model)
-        self.use_openai = self.config.get('use_openai', False)
+        # Model configuration - Prioritize OpenAI API for better performance
+        self.use_openai = self.config.get('use_openai', True)  # Default to True for online models
+        self.model_name = self.config.get('model_name', 'text-embedding-ada-002' if self.use_openai else settings.embedding_model)
         
         # Initialize models
         self.sentence_transformer = None
@@ -53,24 +53,31 @@ class EmbeddingGenerator:
         self._load_models()
     
     def _load_models(self) -> None:
-        """Load embedding models."""
-        if self.use_openai and OPENAI_AVAILABLE and settings.openai_api_key:
+        """Load embedding models - prioritize online APIs."""
+        # Try OpenAI first (online, no local storage needed)
+        if OPENAI_AVAILABLE and settings.openai_api_key:
             try:
                 self.openai_client = openai.OpenAI(api_key=settings.openai_api_key)
-                self.logger.info("OpenAI embedding client initialized")
+                self.use_openai = True
+                self.logger.info("✅ OpenAI embedding client initialized (online)")
+                return  # Success, no need for local models
             except Exception as e:
                 self.logger.warning(f"Failed to initialize OpenAI client: {e}")
-        
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
+
+        # Fallback to local models only if OpenAI unavailable
+        if SENTENCE_TRANSFORMERS_AVAILABLE and not self.use_openai:
             try:
-                self.logger.info(f"Loading sentence transformer model: {self.model_name}")
+                self.logger.info(f"⚠️ Loading local sentence transformer model: {self.model_name}")
+                self.logger.info("This will download ~90MB model on first use...")
                 self.sentence_transformer = SentenceTransformer(self.model_name)
-                self.logger.info("Sentence transformer model loaded successfully")
+                self.logger.info("Local sentence transformer model loaded")
             except Exception as e:
                 self.logger.error(f"Failed to load sentence transformer: {e}")
                 raise EmbeddingError(f"Failed to load embedding model: {e}")
-        else:
-            raise EmbeddingError("No embedding libraries available. Please install sentence-transformers or configure OpenAI.")
+        elif not self.openai_client:
+            self.logger.warning("⚠️ No embedding service available")
+            self.logger.warning("Please configure OpenAI API key for online embeddings")
+            raise EmbeddingError("No embedding service available. Please configure OpenAI API key.")
     
     def generate_embedding(self, text: str, **kwargs) -> np.ndarray:
         """

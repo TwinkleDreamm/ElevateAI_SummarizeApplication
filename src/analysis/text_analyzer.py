@@ -64,25 +64,28 @@ class TextAnalyzer:
         self._load_nlp_models()
     
     def _load_nlp_models(self) -> None:
-        """Load NLP models for text analysis."""
+        """Load lightweight NLP models - avoid heavy downloads."""
         if SPACY_AVAILABLE:
             try:
-                # Try to load Vietnamese model
-                self.nlp_models['vi'] = spacy.load('vi_core_news_sm')
-            except OSError:
-                # Fallback to blank Vietnamese model
-                self.nlp_models['vi'] = Vietnamese()
-            
-            try:
-                # Try to load English model
-                self.nlp_models['en'] = spacy.load('en_core_web_sm')
-            except OSError:
-                # Fallback to blank English model
-                self.nlp_models['en'] = English()
-        
+                # Use blank models to avoid downloading large language models
+                self.logger.info("🚀 Using lightweight spaCy models (no downloads needed)")
+                self.nlp_models['vi'] = Vietnamese()  # Blank Vietnamese model
+                self.nlp_models['en'] = English()     # Blank English model
+
+                # Only try to load full models if explicitly requested
+                if self.config.get('use_full_spacy_models', False):
+                    self.logger.warning("⚠️ Loading full spaCy models (~50MB each)...")
+                    try:
+                        self.nlp_models['vi'] = spacy.load('vi_core_news_sm')
+                        self.nlp_models['en'] = spacy.load('en_core_web_sm')
+                    except OSError:
+                        self.logger.info("Full spaCy models not available, using blank models")
+            except Exception as e:
+                self.logger.warning(f"Failed to load spaCy models: {e}")
+
         if NLTK_AVAILABLE:
             try:
-                # Download required NLTK data
+                # Download minimal NLTK data
                 nltk.download('punkt', quiet=True)
                 nltk.download('stopwords', quiet=True)
             except Exception as e:

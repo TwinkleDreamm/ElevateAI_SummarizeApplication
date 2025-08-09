@@ -41,7 +41,9 @@ class Settings:
 
         # Vector Database Settings
         self.vector_db_path = os.getenv("VECTOR_DB_PATH", "./data/vectordb")
-        self.embedding_model = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        # Prioritize online embedding models to avoid local downloads
+        self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-ada-002")  # OpenAI model
+        self.use_online_embeddings = os.getenv("USE_ONLINE_EMBEDDINGS", "true").lower() == "true"
         self.chunk_size = int(os.getenv("CHUNK_SIZE", "1000"))
         self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "200"))
         self.max_chunks_per_query = int(os.getenv("MAX_CHUNKS_PER_QUERY", "10"))

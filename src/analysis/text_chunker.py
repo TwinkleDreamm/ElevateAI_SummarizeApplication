@@ -59,30 +59,34 @@ class TextChunker:
         self._load_nlp_models()
     
     def _load_nlp_models(self) -> None:
-        """Load NLP models for sentence segmentation."""
+        """Load lightweight NLP models for sentence segmentation."""
         if NLTK_AVAILABLE:
             try:
                 nltk.download('punkt', quiet=True)
             except Exception as e:
                 self.logger.warning(f"Failed to download NLTK punkt: {e}")
-        
+
         if SPACY_AVAILABLE:
             try:
-                # Try to load language models
-                for lang in ['vi', 'en']:
-                    try:
-                        if lang == 'vi':
-                            self.nlp_models[lang] = spacy.load('vi_core_news_sm')
-                        else:
-                            self.nlp_models[lang] = spacy.load('en_core_web_sm')
-                    except OSError:
-                        # Use blank model if specific model not available
-                        if lang == 'vi':
-                            from spacy.lang.vi import Vietnamese
-                            self.nlp_models[lang] = Vietnamese()
-                        else:
-                            from spacy.lang.en import English
-                            self.nlp_models[lang] = English()
+                # Use lightweight blank models by default (no downloads)
+                self.logger.info("🚀 Using lightweight spaCy models for text chunking")
+                from spacy.lang.vi import Vietnamese
+                from spacy.lang.en import English
+
+                self.nlp_models['vi'] = Vietnamese()
+                self.nlp_models['en'] = English()
+
+                # Only load full models if explicitly requested
+                if self.config.get('use_full_spacy_models', False):
+                    self.logger.warning("⚠️ Loading full spaCy models (~50MB each)...")
+                    for lang in ['vi', 'en']:
+                        try:
+                            if lang == 'vi':
+                                self.nlp_models[lang] = spacy.load('vi_core_news_sm')
+                            else:
+                                self.nlp_models[lang] = spacy.load('en_core_web_sm')
+                        except OSError:
+                            self.logger.info(f"Full spaCy model for {lang} not available, using blank model")
             except Exception as e:
                 self.logger.warning(f"Failed to load spaCy models: {e}")
     

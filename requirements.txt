@@ -9,7 +9,7 @@ python-dotenv>=1.0.0
 # Audio/Video processing (optional)
 # moviepy>=1.0.3  # Commented out due to dependency conflicts
 ffmpeg-python>=0.2.0
-# openai-whisper>=20231117  # Optional
+# openai-whisper>=20231117  # Optional - use OpenAI API instead for better performance
 noisereduce>=3.0.0
 librosa>=0.10.0
 soundfile>=0.12.1
@@ -25,7 +25,7 @@ language-tool-python>=2.7.1
 
 # Vector database and embeddings
 faiss-cpu>=1.7.4
-sentence-transformers>=2.2.2
+# sentence-transformers>=2.2.2  # Optional - use OpenAI embeddings API for better performance
 chromadb>=1.0.0
 
 # Web scraping and search

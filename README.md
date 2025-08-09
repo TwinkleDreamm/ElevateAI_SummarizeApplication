@@ -6,13 +6,14 @@ ElevateAI is an advanced AI-powered application that provides intelligent analys
 ## 🚀 Features
 - **Multi-format Support**: Process video, audio, PDF, DOCX, TXT files, and YouTube links
 - **Advanced Memory System**: Short-term and long-term memory with conversation tracking
+- **Online AI Models**: Optimized for cloud-based AI services (OpenAI, Azure) for better performance
 - **Advanced Audio Processing**: Vocal separation, noise reduction, speech enhancement
 - **Intelligent Text Processing**: Content analysis, cleaning, chunking, and embedding
 - **Semantic Search**: Multi-hop retrieval with reranking capabilities
 - **Web Fallback**: Automatic web search when local content is insufficient
 - **Multi-modal AI**: Text-to-speech, speech-to-text, image generation (when API configured)
 - **Interactive Interface**: User-friendly Streamlit web application
-- **Graceful Fallbacks**: Works even when some dependencies are missing
+- **Lightweight & Fast**: Minimal local storage, fast startup, online model prioritization
 
 ## 🏗️ Architecture
 The application follows an Object-Oriented Programming (OOP) design with the following main components:
@@ -79,10 +80,19 @@ Project_1/
 ### Prerequisites
 - Python 3.9 or higher
 - Conda environment named `Project_1`
+- **OpenAI API key (recommended)** for optimal performance with online models
 - **Java 17+ (Java 21 recommended)** for LanguageTool grammar checking
   - Download from: https://adoptium.net/temurin/releases/
 - Azure OpenAI or OpenAI API credentials (optional - app works without them)
 - FFmpeg (for video processing, optional)
+
+### 🚀 Performance Optimization
+ElevateAI is optimized for **online AI models** to provide:
+- ✅ **Fast startup** (no large model downloads)
+- ✅ **Minimal storage** (~5MB vs ~500MB for local models)
+- ✅ **Latest model versions** automatically
+- ✅ **Better accuracy** with cloud-based models
+- ⚠️ **Requires internet** and API keys for full functionality
 
 ### Quick Setup
 1. **Clone the repository**
