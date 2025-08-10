@@ -62,8 +62,16 @@ class VectorDatabase:
         """Initialize or load existing database."""
         try:
             if self._database_exists():
-                self.load_database()
+                self.logger.info("Loading existing database...")
+                try:
+                    self.load_database()
+                    self.logger.info("Database loaded successfully")
+                except Exception as load_error:
+                    self.logger.warning(f"Failed to load existing database: {load_error}")
+                    self.logger.info("Creating new database as fallback")
+                    self._create_new_database()
             else:
+                self.logger.info("No existing database found, creating new one")
                 self._create_new_database()
         except Exception as e:
             self.logger.error(f"Database initialization failed: {e}")
@@ -194,6 +202,11 @@ class VectorDatabase:
                 self.metadata_manager.add_metadata(ids[i], enhanced_metadata)
             
             self.logger.info(f"Added {len(texts)} vectors to database")
+            
+            # Fix: Auto-save database after adding data
+            self.save_database()
+            self.logger.info("Database auto-saved after adding new vectors")
+            
             return ids
             
         except Exception as e:
