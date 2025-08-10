@@ -58,12 +58,16 @@ class StreamlitApp:
             self.text_cleaner = TextCleaner()
             self.text_chunker = TextChunker()
             
-            # Database and search
+            # Database and search - Fix: Load existing database first
             self.vector_db = VectorDatabase()
             self.embedding_generator = EmbeddingGenerator()
-            self.search_engine = SemanticSearchEngine()
-            self.retrieval_engine = RetrievalEngine()
+            self.search_engine = SemanticSearchEngine(vector_db=self.vector_db)
+            self.retrieval_engine = RetrievalEngine(search_engine=self.search_engine)
             self.web_search = WebSearchEngine()
+            
+            # Fix: Initialize search engine with existing database
+            if hasattr(self.search_engine, 'set_vector_database'):
+                self.search_engine.set_vector_database(self.vector_db)
             
             # AI components (with graceful fallback)
             try:
@@ -91,9 +95,25 @@ class StreamlitApp:
             
             self.logger.info("All components initialized successfully")
             
+            # Fix: Display database status after initialization
+            self._display_database_status()
+            
         except Exception as e:
             self.logger.error(f"Failed to initialize components: {e}")
             st.error(f"Failed to initialize application components: {e}")
+    
+    def _display_database_status(self):
+        """Display current database status."""
+        try:
+            stats = self.vector_db.get_database_stats()
+            self.logger.info(f"Database status: {stats}")
+            
+            # Store in session state for UI display
+            st.session_state.vector_db_stats = stats
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to get database status: {e}")
+            st.session_state.vector_db_stats = {}
     
     def _initialize_session_state(self):
         """Initialize Streamlit session state."""
@@ -191,6 +211,13 @@ class StreamlitApp:
                 # Add to vector database
                 UIComponents.render_processing_status("Adding to database...", 0.8)
                 self._add_to_database(processed_texts)
+                
+                # Fix: Ensure database is saved after processing
+                try:
+                    self.vector_db.save_database()
+                    self.logger.info("Database saved after content processing")
+                except Exception as save_error:
+                    self.logger.warning(f"Failed to save database: {save_error}")
                 
                 UIComponents.render_processing_status("Complete!", 1.0)
                 UIComponents.render_success(f"Successfully processed {len(processed_texts)} items")
@@ -383,6 +410,13 @@ class StreamlitApp:
             
             # Add to history
             UIComponents.add_to_history(query, summary_result.summary)
+            
+            # Fix: Ensure database is saved after processing
+            try:
+                self.vector_db.save_database()
+                self.logger.info("Database saved after query processing")
+            except Exception as save_error:
+                self.logger.warning(f"Failed to save database: {save_error}")
             
             UIComponents.render_processing_status("Complete!", 1.0)
             

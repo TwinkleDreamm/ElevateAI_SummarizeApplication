@@ -26,12 +26,13 @@ class RetrievalContext:
 class RetrievalEngine:
     """Multi-hop retrieval engine for complex queries."""
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, search_engine: Optional[SemanticSearchEngine] = None):
         """
         Initialize the retrieval engine.
         
         Args:
             config: Optional configuration dictionary
+            search_engine: Optional SemanticSearchEngine instance to use
         """
         self.config = config or {}
         self.settings = settings
@@ -46,8 +47,18 @@ class RetrievalEngine:
             settings.max_chunks_per_query
         )
         
-        # Initialize search engine
-        self.search_engine = SemanticSearchEngine(config)
+        # Initialize search engine - Fix: Use provided instance or create new one
+        if search_engine:
+            self.search_engine = search_engine
+            self.logger.info("Using provided search engine instance")
+        else:
+            self.search_engine = SemanticSearchEngine(config)
+            self.logger.info("Created new search engine instance")
+    
+    def set_search_engine(self, search_engine: SemanticSearchEngine) -> None:
+        """Set the search engine instance to use."""
+        self.search_engine = search_engine
+        self.logger.info("Search engine instance updated")
     
     def multi_hop_retrieval(self, query: str, **kwargs) -> List[SearchResult]:
         """
