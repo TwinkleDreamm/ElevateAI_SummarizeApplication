@@ -43,9 +43,24 @@ class EmbeddingGenerator:
         self.logger = logger
         
         # Model configuration
-        self.model_name = self.config.get('model_name', settings.openai_embedding_model if self.config.get('use_openai', True) else settings.embedding_model)
-        self.use_openai = self.config.get('use_openai', settings.use_openai)
+        self.model_name = self.config.get('model_name', settings.embedding_model)
+        self.use_openai = self.config.get('use_openai', True)
         
+        # Fix: Use correct base URL for third-party providers
+        # For third-party providers, use azure_openai_endpoint
+        # For OpenAI, use openai_api_base
+        if (hasattr(self.settings, 'azure_openai_endpoint') and 
+            self.settings.azure_openai_endpoint and
+            "api.openai.com" not in self.settings.azure_openai_endpoint and
+            "openai.azure.com" not in self.settings.azure_openai_endpoint):
+            # Third-party provider detected
+            self.openai_base_url = self.settings.azure_openai_endpoint
+            self.logger.info(f"[EMBEDDING][CONFIG] Detected third-party provider: {self.openai_base_url}")
+        else:
+            # Use standard OpenAI
+            self.openai_base_url = getattr(self.settings, 'openai_api_base', 'https://api.openai.com/v1')
+            self.logger.info(f"[EMBEDDING][CONFIG] Using standard OpenAI: {self.openai_base_url}")
+
         # Initialize models
         self.sentence_transformer = None
         self.openai_client = None
@@ -53,26 +68,39 @@ class EmbeddingGenerator:
         self._load_models()
     
     def _load_models(self) -> None:
-        """Load embedding models."""
-        models_loaded = False
-
-        self.logger.info(f"use_openai: {self.use_openai}, OPENAI_AVAILABLE: {OPENAI_AVAILABLE}, settings.openai_api_key: {settings.openai_api_key}")
-        
-        if self.use_openai and OPENAI_AVAILABLE and settings.openai_api_key:
+        """Load embedding models with online-first, fallback to local."""
+        self.online_available = False
+        # Try OpenAI first
+        if self.use_openai and OPENAI_AVAILABLE and self.settings.openai_api_key:
             try:
-                self.openai_client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
-                self.logger.info("✅ OpenAI embedding client initialized")
-                models_loaded = True
-                return  # Exit early if OpenAI is loaded successfully
+                key = self.settings.openai_api_key
+                key_masked = key[:4] + "..." + key[-4:] if len(key) > 8 else "***"
+                
+                # Fix: Use correct model name for embeddings
+                # For third-party providers, use the actual model name, not deployment name
+                embedding_model = self.settings.azure_openai_embedding_deployment
+                if not embedding_model:
+                    embedding_model = 'text-embedding-ada-002'  # Default fallback
+                
+                self.logger.info(f"[EMBEDDING][ONLINE][LOAD] Initializing OpenAI embedding API model: {embedding_model}, base_url: {self.openai_base_url}, key: {key_masked}")
+                self.openai_client = openai.OpenAI(api_key=self.settings.openai_api_key, base_url=self.openai_base_url)
+                self.logger.info(f"[EMBEDDING][ONLINE][SUCCESS] Ready to use online model: {embedding_model}, base_url: {self.openai_base_url}, key: {key_masked}")
+                self.online_available = True
             except Exception as e:
-                self.logger.warning(f"❌ Failed to initialize OpenAI client: {e}")
+                self.logger.warning(f"[EMBEDDING][ONLINE][FAIL] Could not initialize OpenAI embedding API ({embedding_model}), base_url: {self.openai_base_url}. Falling back to local. Reason: {e}")
         
-        if not models_loaded:
-            self.logger.warning("⚠️  No embedding models loaded. Please configure OpenAI API key for embedding functionality.")
-
-    def has_model(self) -> bool:
-        """Return True if either OpenAI client or local model is available."""
-        return (self.use_openai and self.openai_client is not None) or (self.sentence_transformer is not None)
+        # Fallback to local model if online not available
+        if not self.online_available and SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                self.logger.info(f"[EMBEDDING][LOCAL][LOAD] Loading local model: {self.model_name}")
+                self.sentence_transformer = SentenceTransformer(self.model_name)
+                self.logger.info(f"[EMBEDDING][LOCAL][SUCCESS] Ready to use local model: {self.model_name}")
+            except Exception as e:
+                self.logger.error(f"[EMBEDDING][LOCAL][FAIL] Could not load local model ({self.model_name}): {e}")
+                raise EmbeddingError(f"Failed to load embedding model: {e}")
+        elif not self.online_available:
+            self.logger.error("[EMBEDDING][FAIL] No embedding model available. Requires OPENAI_API_KEY or install sentence-transformers.")
+            raise EmbeddingError("No embedding libraries available. Please install sentence-transformers or configure OpenAI.")
     
     def generate_embedding(self, text: str, **kwargs) -> np.ndarray:
         """
@@ -92,7 +120,8 @@ class EmbeddingGenerator:
             raise EmbeddingError("Empty text provided for embedding")
         
         try:
-            if self.use_openai and self.openai_client:
+            # Fix: Prioritize online models when available
+            if self.online_available and self.openai_client:
                 return self._generate_openai_embedding(text, **kwargs)
             elif self.sentence_transformer:
                 return self._generate_sentence_transformer_embedding(text, **kwargs)
@@ -101,7 +130,7 @@ class EmbeddingGenerator:
                 
         except Exception as e:
             self.logger.error(f"Embedding generation failed: {e}")
-            raise EmbeddingError(f"Failed to generate embedding: {e}")
+            raise EmbeddingError(f"Embedding generation failed: {e}")
     
     def generate_embeddings_batch(self, texts: List[str], **kwargs) -> List[np.ndarray]:
         """
@@ -112,30 +141,26 @@ class EmbeddingGenerator:
             **kwargs: Additional parameters
             
         Returns:
-            List of embedding vectors
+            List of embedding vectors as numpy arrays
             
         Raises:
-            EmbeddingError: If batch embedding generation fails
+            EmbeddingError: If embedding generation fails
         """
         if not texts:
-            return []
-        
-        # Filter out empty texts
-        valid_texts = [text for text in texts if text and text.strip()]
-        if not valid_texts:
-            raise EmbeddingError("No valid texts provided for embedding")
+            raise EmbeddingError("No texts provided for batch embedding")
         
         try:
-            if self.use_openai and self.openai_client:
-                return self._generate_openai_embeddings_batch(valid_texts, **kwargs)
+            # Fix: Prioritize online models when available
+            if self.online_available and self.openai_client:
+                return self._generate_openai_embeddings_batch(texts, **kwargs)
             elif self.sentence_transformer:
-                return self._generate_sentence_transformer_embeddings_batch(valid_texts, **kwargs)
+                return self._generate_sentence_transformer_embeddings_batch(texts, **kwargs)
             else:
                 raise EmbeddingError("No embedding model available")
                 
         except Exception as e:
             self.logger.error(f"Batch embedding generation failed: {e}")
-            raise EmbeddingError(f"Failed to generate batch embeddings: {e}")
+            raise EmbeddingError(f"Batch embedding generation failed: {e}")
     
     def _generate_sentence_transformer_embedding(self, text: str, **kwargs) -> np.ndarray:
         """Generate embedding using sentence transformer."""
@@ -165,11 +190,19 @@ class EmbeddingGenerator:
     
     def _generate_openai_embedding(self, text: str, **kwargs) -> np.ndarray:
         """Generate embedding using OpenAI API."""
+        import time
         try:
+            # Fix: Use correct model name from settings
+            model_name = kwargs.get('model', self.settings.azure_openai_embedding_deployment or 'text-embedding-ada-002')
+            
+            self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API (model: {model_name}, base_url: {self.openai_base_url})")
+            start_time = time.time()
             response = self.openai_client.embeddings.create(
-                model=kwargs.get('model', settings.openai_embedding_model),
+                model=model_name,
                 input=text
             )
+            elapsed = time.time() - start_time
+            self.logger.info(f"[EMBEDDING][ONLINE] Received result (elapsed: {elapsed:.2f}s)")
             embedding = np.array(response.data[0].embedding)
             
             if kwargs.get('normalize', True):
@@ -177,16 +210,24 @@ class EmbeddingGenerator:
             
             return embedding
         except Exception as e:
+            self.logger.error(f"[EMBEDDING][ONLINE][ERROR] Error calling OpenAI embedding API: {e}")
             raise EmbeddingError(f"OpenAI embedding failed: {e}")
     
     def _generate_openai_embeddings_batch(self, texts: List[str], **kwargs) -> List[np.ndarray]:
         """Generate embeddings using OpenAI API in batch."""
+        import time
         try:
-            # OpenAI API supports batch processing
+            # Fix: Use correct model name from settings
+            model_name = kwargs.get('model', self.settings.azure_openai_embedding_deployment or 'text-embedding-ada-002')
+            
+            self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API batch (model: {model_name}, base_url: {self.openai_base_url}, batch_size: {len(texts)})")
+            start_time = time.time()
             response = self.openai_client.embeddings.create(
-                model=kwargs.get('model', settings.openai_embedding_model),
+                model=model_name,
                 input=texts
             )
+            elapsed = time.time() - start_time
+            self.logger.info(f"[EMBEDDING][ONLINE] Received batch result (elapsed: {elapsed:.2f}s)")
             
             embeddings = []
             for data in response.data:
@@ -197,6 +238,7 @@ class EmbeddingGenerator:
             
             return embeddings
         except Exception as e:
+            self.logger.error(f"[EMBEDDING][ONLINE][ERROR] Error calling OpenAI embedding API batch: {e}")
             raise EmbeddingError(f"OpenAI batch embedding failed: {e}")
     
     def get_embedding_dimension(self) -> int:

@@ -27,10 +27,11 @@ class Settings:
         self.azure_openai_deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4")
         self.azure_openai_embedding_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
 
-        # OpenAI Configuration (fallback)
+        # OpenAI Configuration (and compatible providers)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
+        self.openai_chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
         # Google Search API
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -69,8 +70,6 @@ class Settings:
         
         # Performance Settings
         self.disable_nltk_downloads = os.getenv("DISABLE_NLTK_DOWNLOADS", "True").lower() == "true"
-
-        # .env already loaded above
 
     def _load_env_file(self):
         """Load environment variables from .env file."""
