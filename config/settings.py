@@ -10,6 +10,9 @@ class Settings:
     """Application settings with environment variable support."""
 
     def __init__(self):
+        # Load environment variables from .env first
+        self._load_env_file()
+
         # Application Settings
         self.app_name = os.getenv("APP_NAME", "ElevateAI")
         self.app_version = os.getenv("APP_VERSION", "1.0.0")
@@ -23,8 +26,10 @@ class Settings:
         self.azure_openai_deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4")
         self.azure_openai_embedding_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
 
-        # OpenAI Configuration (fallback)
+        # OpenAI Configuration (and compatible providers)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
+        self.openai_chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
 
         # Google Search API
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -59,9 +64,6 @@ class Settings:
         # Language Settings
         self.default_language = os.getenv("DEFAULT_LANGUAGE", "vi")
         self.supported_languages = ["vi", "en", "zh", "ja", "ko"]
-
-        # Load environment variables from .env file if available
-        self._load_env_file()
 
     def _load_env_file(self):
         """Load environment variables from .env file."""
