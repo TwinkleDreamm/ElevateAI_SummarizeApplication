@@ -92,6 +92,30 @@ class UIComponents:
                 help="Search web when local results are insufficient"
             )
             
+            # Function calling option in Search Settings
+            enable_function_calling = st.checkbox(
+                "🚀 Enable Function Calling",
+                value=False,
+                help="Use AI function calling for enhanced analysis and summarization"
+            )
+            
+            if enable_function_calling:
+                st.success("✅ Function calling enabled!")
+                with st.expander("📊 Function Calling Benefits", expanded=False):
+                    st.write("**🎯 Enhanced Analysis:**")
+                    st.write("• Document structure analysis")
+                    st.write("• Key topic extraction")
+                    st.write("• Content type detection")
+                    st.write("• Format recommendations")
+                    
+                    st.write("**📈 Better Results:**")
+                    st.write("• More structured summaries")
+                    st.write("• Higher accuracy")
+                    st.write("• Detailed insights")
+                    st.write("• Quality metrics")
+            else:
+                st.info("💡 Enable for enhanced AI analysis")
+            
             # Multi-modal settings
             st.subheader("Multi-modal Features")
             
@@ -144,6 +168,7 @@ class UIComponents:
                 'similarity_threshold': similarity_threshold,
                 'max_results': max_results,
                 'enable_web_search': enable_web_search,
+                'enable_function_calling': enable_function_calling,
                 'enable_tts': enable_tts,
                 'tts_voice': tts_voice,
                 'enable_image_gen': enable_image_gen,
