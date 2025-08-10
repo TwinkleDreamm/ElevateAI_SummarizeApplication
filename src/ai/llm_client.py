@@ -23,6 +23,7 @@ from config.settings import settings
 from src.utils.logger import logger
 from src.utils.exceptions import LLMError
 from src.utils.memory import memory_manager
+from src.ai.function_calling import FunctionCaller
 
 
 @dataclass
@@ -62,6 +63,9 @@ class LLMClient:
         self.azure_client = None
         self.openai_client = None
         self.langchain_client = None
+        
+        # Initialize function caller
+        self.function_caller = FunctionCaller()
         
         self._initialize_clients()
         
@@ -225,8 +229,14 @@ class LLMClient:
                     'arguments': choice.message.function_call.arguments
                 }]
             
+            # Check for empty content and provide fallback
+            content = choice.message.content or ""
+            if not content.strip():
+                self.logger.warning("Empty content received from Azure model, providing fallback response")
+                content = "I apologize, but I'm unable to generate a response at the moment. Please try rephrasing your question or check your configuration."
+            
             return LLMResponse(
-                content=choice.message.content or "",
+                content=content,
                 model=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
                 finish_reason=choice.finish_reason,
@@ -234,6 +244,7 @@ class LLMClient:
             )
             
         except Exception as e:
+            self.logger.error(f"Azure OpenAI generation failed: {e}")
             raise LLMError(f"Azure OpenAI generation failed: {e}")
     
     def _generate_openai_response(self, messages: List[Dict[str, str]], **kwargs) -> LLMResponse:
@@ -258,8 +269,14 @@ class LLMClient:
                     'arguments': choice.message.function_call.arguments
                 }]
             
+            # Check for empty content and provide fallback
+            content = choice.message.content or ""
+            if not content.strip():
+                self.logger.warning("Empty content received from model, providing fallback response")
+                content = "I apologize, but I'm unable to generate a response at the moment. Please try rephrasing your question or check your configuration."
+            
             return LLMResponse(
-                content=choice.message.content or "",
+                content=content,
                 model=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
                 finish_reason=choice.finish_reason,
@@ -267,6 +284,7 @@ class LLMClient:
             )
             
         except Exception as e:
+            self.logger.error(f"OpenAI generation failed: {e}")
             raise LLMError(f"OpenAI generation failed: {e}")
     
     def generate_streaming_response(self, messages: List[Dict[str, str]], **kwargs) -> AsyncGenerator[str, None]:
@@ -533,3 +551,81 @@ class LLMClient:
             return "OpenAI"
         else:
             return "None"
+    
+    # Function Calling Methods
+    def get_available_functions(self) -> List[str]:
+        """Get list of available function names."""
+        return self.function_caller.get_available_functions()
+    
+    def get_function_definitions(self) -> List[Dict[str, Any]]:
+        """Get function definitions in OpenAI format for LLM."""
+        return self.function_caller.get_function_definitions()
+    
+    def register_function(self, name: str, description: str, parameters: Dict[str, Any], 
+                         function: callable) -> None:
+        """Register a new function for calling."""
+        self.function_caller.register_function(name, description, parameters, function)
+    
+    def call_function(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a specific function by name with arguments."""
+        return self.function_caller.call_function(name, arguments)
+    
+    def process_function_calls(self, function_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process function calls and return results."""
+        return self.function_caller.process_function_calls(function_calls)
+    
+    def generate_response_with_functions(self, messages: List[Dict[str, str]], 
+                                       use_functions: bool = True, **kwargs) -> LLMResponse:
+        """
+        Generate response with optional function calling support.
+        
+        Args:
+            messages: List of message dictionaries
+            use_functions: Whether to enable function calling
+            **kwargs: Additional parameters
+            
+        Returns:
+            LLMResponse with potential function calls
+        """
+        try:
+            self.logger.info(f"Generating response with functions: {use_functions}")
+            self.logger.info(f"Messages count: {len(messages)}")
+            
+            if use_functions:
+                # Add function definitions to the request
+                functions = self.get_function_definitions()
+                self.logger.info(f"Available functions: {len(functions)}")
+                
+                if functions:
+                    kwargs['functions'] = functions
+                    kwargs['function_call'] = 'auto'  # Let the model decide when to call functions
+                    self.logger.info("Function definitions added to request")
+                else:
+                    self.logger.warning("No function definitions available")
+            
+            # Generate response
+            self.logger.info("Calling generate_response...")
+            response = self.generate_response(messages, **kwargs)
+            self.logger.info(f"Response received: {response.content[:100]}...")
+            
+            # If response contains function calls, process them
+            if response.function_calls:
+                self.logger.info(f"Processing {len(response.function_calls)} function calls")
+                function_results = self.process_function_calls(response.function_calls)
+                
+                # Add function results to messages for follow-up
+                function_message = self.function_caller.create_function_call_message(function_results)
+                messages.append(function_message)
+                
+                # Generate final response with function results
+                self.logger.info("Generating final response with function results...")
+                final_response = self.generate_response(messages, **kwargs)
+                self.logger.info(f"Final response: {final_response.content[:100]}...")
+                return final_response
+            
+            self.logger.info("No function calls detected, returning original response")
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error in generate_response_with_functions: {e}")
+            raise
