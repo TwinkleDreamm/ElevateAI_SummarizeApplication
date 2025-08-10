@@ -14,6 +14,22 @@ ElevateAI is an advanced AI-powered application that provides intelligent analys
 - **Interactive Interface**: User-friendly Streamlit web application
 - **Graceful Fallbacks**: Works even when some dependencies are missing
 
+## 🔧 Recent Fixes & Improvements (v1.1.0)
+- **✅ Issue #1: Embedding Model Configuration**
+  - Fixed online embedding model detection for third-party providers
+  - Corrected base URL and API key selection logic
+  - Enhanced model name handling for embeddings
+
+- **✅ Issue #2: Vector Database Persistence**
+  - Resolved database data loss after application restart
+  - Implemented auto-save functionality
+  - Fixed shared database instances between components
+
+- **✅ Issue #3: LLM Client Provider Detection**
+  - Fixed Azure OpenAI parameter handling
+  - Implemented automatic third-party provider detection
+  - Enhanced provider compatibility and error handling
+
 ## 🏗️ Architecture
 The application follows an Object-Oriented Programming (OOP) design with the following main components:
 
