@@ -43,12 +43,12 @@ class EmbeddingGenerator:
         self.logger = logger
         
         # Model configuration
-        self.model_name = self.config.get('model_name', settings.embedding_model)
+        self.embedding_model = self.config.get('model_name', settings.openai_embedding_model)
         self.use_openai = self.config.get('use_openai', True)
         
         # Fix: Use correct base URL for third-party providers
         # For third-party providers, use azure_openai_endpoint
-        # For OpenAI, use openai_api_base
+        # For OpenAI, use openai_base_url
         if (hasattr(self.settings, 'azure_openai_endpoint') and 
             self.settings.azure_openai_endpoint and
             "api.openai.com" not in self.settings.azure_openai_endpoint and
@@ -58,7 +58,7 @@ class EmbeddingGenerator:
             self.logger.info(f"[EMBEDDING][CONFIG] Detected third-party provider: {self.openai_base_url}")
         else:
             # Use standard OpenAI
-            self.openai_base_url = getattr(self.settings, 'openai_api_base', 'https://api.openai.com/v1')
+            self.openai_base_url =self.settings.openai_base_url
             self.logger.info(f"[EMBEDDING][CONFIG] Using standard OpenAI: {self.openai_base_url}")
 
         # Initialize models
@@ -78,25 +78,25 @@ class EmbeddingGenerator:
                 
                 # Fix: Use correct model name for embeddings
                 # For third-party providers, use the actual model name, not deployment name
-                embedding_model = self.settings.azure_openai_embedding_deployment
-                if not embedding_model:
-                    embedding_model = 'text-embedding-ada-002'  # Default fallback
+                self.embedding_model = self.settings.openai_embedding_model
+                if not self.embedding_model:
+                    self.embedding_model = 'text-embedding-ada-002'  # Default fallback
                 
-                self.logger.info(f"[EMBEDDING][ONLINE][LOAD] Initializing OpenAI embedding API model: {embedding_model}, base_url: {self.openai_base_url}, key: {key_masked}")
-                self.openai_client = openai.OpenAI(api_key=self.settings.openai_api_key, base_url=self.openai_base_url)
-                self.logger.info(f"[EMBEDDING][ONLINE][SUCCESS] Ready to use online model: {embedding_model}, base_url: {self.openai_base_url}, key: {key_masked}")
+                self.logger.info(f"[EMBEDDING][ONLINE][LOAD] Initializing OpenAI embedding API model: {self.embedding_model}, base_url: {self.openai_base_url}, key: {key_masked}")
+                self.openai_client = OpenAI(api_key=self.settings.openai_api_key, base_url=self.openai_base_url)
+                self.logger.info(f"[EMBEDDING][ONLINE][SUCCESS] Ready to use online model: {self.embedding_model}, base_url: {self.openai_base_url}, key: {key_masked}")
                 self.online_available = True
             except Exception as e:
-                self.logger.warning(f"[EMBEDDING][ONLINE][FAIL] Could not initialize OpenAI embedding API ({embedding_model}), base_url: {self.openai_base_url}. Falling back to local. Reason: {e}")
+                self.logger.warning(f"[EMBEDDING][ONLINE][FAIL] Could not initialize OpenAI embedding API ({self.embedding_model}), base_url: {self.openai_base_url}. Falling back to local. Reason: {e}")
         
         # Fallback to local model if online not available
         if not self.online_available and SENTENCE_TRANSFORMERS_AVAILABLE:
             try:
-                self.logger.info(f"[EMBEDDING][LOCAL][LOAD] Loading local model: {self.model_name}")
-                self.sentence_transformer = SentenceTransformer(self.model_name)
-                self.logger.info(f"[EMBEDDING][LOCAL][SUCCESS] Ready to use local model: {self.model_name}")
+                self.logger.info(f"[EMBEDDING][LOCAL][LOAD] Loading local model: {self.embedding_model}")
+                self.sentence_transformer = SentenceTransformer(self.embedding_model)
+                self.logger.info(f"[EMBEDDING][LOCAL][SUCCESS] Ready to use local model: {self.embedding_model}")
             except Exception as e:
-                self.logger.error(f"[EMBEDDING][LOCAL][FAIL] Could not load local model ({self.model_name}): {e}")
+                self.logger.error(f"[EMBEDDING][LOCAL][FAIL] Could not load local model ({self.embedding_model}): {e}")
                 raise EmbeddingError(f"Failed to load embedding model: {e}")
         elif not self.online_available:
             self.logger.error("[EMBEDDING][FAIL] No embedding model available. Requires OPENAI_API_KEY or install sentence-transformers.")
@@ -193,7 +193,7 @@ class EmbeddingGenerator:
         import time
         try:
             # Fix: Use correct model name from settings
-            model_name = kwargs.get('model', self.settings.azure_openai_embedding_deployment or 'text-embedding-ada-002')
+            model_name = kwargs.get('model', self.embedding_model or 'text-embedding-ada-002')
             
             self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API (model: {model_name}, base_url: {self.openai_base_url})")
             start_time = time.time()
@@ -218,7 +218,7 @@ class EmbeddingGenerator:
         import time
         try:
             # Fix: Use correct model name from settings
-            model_name = kwargs.get('model', self.settings.azure_openai_embedding_deployment or 'text-embedding-ada-002')
+            model_name = kwargs.get('model', self.embedding_model or 'text-embedding-ada-002')
             
             self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API batch (model: {model_name}, base_url: {self.openai_base_url}, batch_size: {len(texts)})")
             start_time = time.time()
@@ -257,7 +257,7 @@ class EmbeddingGenerator:
                 'text-embedding-3-small': 1536,
                 'text-embedding-3-large': 3072
             }
-            return model_dims.get(self.config.get('model', settings.openai_embedding_model), 1536)
+            return model_dims.get(self.config.get('model', self.embedding_model), 1536)
         else:
             return 384  # Default dimension
     
@@ -295,7 +295,7 @@ class EmbeddingGenerator:
         """
         try:
             cache_data = {
-                'model_name': self.model_name,
+                'model_name': self.embedding_model,
                 'use_openai': self.use_openai,
                 'embedding_dimension': self.get_embedding_dimension()
             }
@@ -322,7 +322,7 @@ class EmbeddingGenerator:
                 cache_data = pickle.load(f)
             
             # Validate cache compatibility
-            if cache_data.get('model_name') == self.model_name:
+            if cache_data.get('model_name') == self.embedding_model:
                 self.logger.info(f"Model cache loaded from {cache_path}")
                 return True
             else:
@@ -340,8 +340,8 @@ class EmbeddingGenerator:
             Dictionary with model information
         """
         return {
-            'model_name': self.model_name,
             'use_openai': self.use_openai,
+            'embedding_model': self.embedding_model,
             'embedding_dimension': self.get_embedding_dimension(),
             'sentence_transformer_available': SENTENCE_TRANSFORMERS_AVAILABLE,
             'openai_available': OPENAI_AVAILABLE and bool(settings.openai_api_key)

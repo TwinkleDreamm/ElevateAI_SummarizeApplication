@@ -30,8 +30,8 @@ class Settings:
         # OpenAI Configuration (and compatible providers)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
-        self.openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
-        self.openai_chat_model = os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+        self.openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL")
+        self.openai_chat_model = os.getenv("OPENAI_CHAT_MODEL")
 
         # Google Search API
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -49,7 +49,6 @@ class Settings:
         # Vector Database Settings
         self.vector_db_path = os.getenv("VECTOR_DB_PATH", "./data/vectordb")
         # Local embedding model name (used only when not using OpenAI)
-        self.embedding_model = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
         self.chunk_size = int(os.getenv("CHUNK_SIZE", "1000"))
         self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "200"))
         self.max_chunks_per_query = int(os.getenv("MAX_CHUNKS_PER_QUERY", "10"))

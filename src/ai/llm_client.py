@@ -54,8 +54,6 @@ class LLMClient:
         self.logger = logger
         
         # Model configuration
-        self.use_azure = self.config.get('use_azure', True)
-        self.model_name = self.config.get('model_name', settings.azure_openai_deployment_name)
         self.temperature = self.config.get('temperature', 0.7)
         self.max_tokens = self.config.get('max_tokens', 2000)
         
@@ -71,64 +69,37 @@ class LLMClient:
         
         # Fix: Log provider type after initialization
         provider_info = self.get_model_info()
-        self.logger.info(f"LLM Client initialized - Provider: {provider_info['provider_type']}, Model: {self.model_name}")
+        self.logger.info(f"LLM Client initialized - Provider: Model: {self.model_name}")
     
     def _initialize_clients(self) -> None:
         """Initialize OpenAI clients."""
         try:
-            # Fix: Detect provider type and initialize appropriate client
-            if (self.use_azure and settings.azure_openai_api_key and 
-                settings.azure_openai_endpoint):
+            # Initialize Azure OpenAI client
+            if (settings.azure_openai_api_key and settings.azure_openai_endpoint and settings.azure_openai_deployment_name):
+                self.model_name = self.config.get('model_name', settings.azure_openai_deployment_name)
+                self.azure_client = AzureOpenAI(
+                    api_key=settings.azure_openai_api_key,
+                    api_version=settings.azure_openai_api_version,
+                    azure_endpoint=settings.azure_openai_endpoint
+                )
+                self.logger.info("Azure OpenAI client initialized")
                 
-                # Check if this is a third-party provider (like YesScale)
-                if ("api.yescale.io" in settings.azure_openai_endpoint or
-                    "api.openai.com" not in settings.azure_openai_endpoint and
-                    "openai.azure.com" not in settings.azure_openai_endpoint):
-                    
-                    # Third-party provider - use OpenAI client with base_url
-                    self.openai_client = OpenAI(
-                        api_key=settings.azure_openai_api_key,
-                        base_url=settings.azure_openai_endpoint
-                    )
-                    self.logger.info(f"Third-party LLM client initialized: {settings.azure_openai_endpoint}")
-                    
-                    # Initialize Langchain client for third-party
-                    if LANGCHAIN_AVAILABLE:
-                        self.langchain_client = ChatOpenAI(
-                            api_key=settings.azure_openai_api_key,
-                            base_url=settings.azure_openai_endpoint,
-                            model_name=self.model_name,
-                            temperature=self.temperature,
-                            max_tokens=self.max_tokens
-                        )
-                        self.logger.info("Langchain third-party client initialized")
-                
-                else:
-                    # Real Azure OpenAI - use Azure client
-                    self.azure_client = AzureOpenAI(
+                # Initialize Langchain Azure client if available
+                if LANGCHAIN_AVAILABLE:
+                    self.langchain_client = AzureChatOpenAI(
                         api_key=settings.azure_openai_api_key,
                         api_version=settings.azure_openai_api_version,
-                        azure_endpoint=settings.azure_openai_endpoint
+                        azure_endpoint=settings.azure_openai_endpoint,
+                        deployment_name=self.model_name,
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens
                     )
-                    self.logger.info("Azure OpenAI client initialized")
-                    
-                    # Initialize Langchain Azure client if available
-                    if LANGCHAIN_AVAILABLE:
-                        self.langchain_client = AzureChatOpenAI(
-                            api_key=settings.azure_openai_api_key,
-                            api_version=settings.azure_openai_api_version,
-                            azure_endpoint=settings.azure_openai_endpoint,
-                            deployment_name=self.model_name,
-                            temperature=self.temperature,
-                            max_tokens=self.max_tokens
-                        )
-                        self.logger.info("Langchain Azure client initialized")
             
             # Fallback to OpenAI client
             elif settings.openai_api_key:
                 self.openai_client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
                 self.logger.info("OpenAI client initialized")
-                
+                self.model_name = self.config.get('model_name', settings.openai_chat_model)
                 # Initialize Langchain OpenAI client if available
                 if LANGCHAIN_AVAILABLE:
                     self.langchain_client = ChatOpenAI(
@@ -207,11 +178,8 @@ class LLMClient:
     def _generate_azure_response(self, messages: List[Dict[str, str]], **kwargs) -> LLMResponse:
         """Generate response using Azure OpenAI."""
         try:
-            # Fix: Use deployment_id for Azure OpenAI, not model
-            deployment_id = kwargs.get('deployment_id', self.model_name)
-            
             response = self.azure_client.chat.completions.create(
-                model=deployment_id,  # This should be deployment_id for Azure
+                model=self.model_name,
                 messages=messages,
                 temperature=kwargs.get('temperature', self.temperature),
                 max_tokens=kwargs.get('max_tokens', self.max_tokens),
@@ -229,14 +197,8 @@ class LLMClient:
                     'arguments': choice.message.function_call.arguments
                 }]
             
-            # Check for empty content and provide fallback
-            content = choice.message.content or ""
-            if not content.strip():
-                self.logger.warning("Empty content received from Azure model, providing fallback response")
-                content = "I apologize, but I'm unable to generate a response at the moment. Please try rephrasing your question or check your configuration."
-            
             return LLMResponse(
-                content=content,
+                content=choice.message.content or "",
                 model=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
                 finish_reason=choice.finish_reason,
@@ -269,14 +231,8 @@ class LLMClient:
                     'arguments': choice.message.function_call.arguments
                 }]
             
-            # Check for empty content and provide fallback
-            content = choice.message.content or ""
-            if not content.strip():
-                self.logger.warning("Empty content received from model, providing fallback response")
-                content = "I apologize, but I'm unable to generate a response at the moment. Please try rephrasing your question or check your configuration."
-            
             return LLMResponse(
-                content=content,
+                content=choice.message.content or "",
                 model=response.model,
                 usage=response.usage.model_dump() if response.usage else {},
                 finish_reason=choice.finish_reason,
@@ -299,29 +255,17 @@ class LLMClient:
             Response chunks
         """
         try:
-            # Fix: Use correct client and parameters based on provider type
-            if self.azure_client:
-                # Azure OpenAI - use deployment_id
-                deployment_id = kwargs.get('deployment_id', self.model_name)
-                response = self.azure_client.chat.completions.create(
-                    model=deployment_id,
-                    messages=messages,
-                    temperature=kwargs.get('temperature', self.temperature),
-                    max_tokens=kwargs.get('max_tokens', self.max_tokens),
-                    stream=True
-                )
-            elif self.openai_client:
-                # OpenAI or third-party - use model name
-                model_name = kwargs.get('model', self.model_name)
-                response = self.openai_client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=kwargs.get('temperature', self.temperature),
-                    max_tokens=kwargs.get('max_tokens', self.max_tokens),
-                    stream=True
-                )
-            else:
+            client = self.azure_client or self.openai_client
+            if not client:
                 raise LLMError("No LLM client available")
+            
+            response = client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=kwargs.get('temperature', self.temperature),
+                max_tokens=kwargs.get('max_tokens', self.max_tokens),
+                stream=True
+            )
             
             for chunk in response:
                 if chunk.choices[0].delta.content:
@@ -519,38 +463,22 @@ class LLMClient:
         self.logger.info("Conversation memory cleared")
 
     def get_model_info(self) -> Dict[str, Any]:
-        """Get information about the current model configuration."""
-        info = {
-            'provider_type': self._get_provider_type(),
+        """
+        Get information about the current model configuration.
+
+        Returns:
+            Dictionary with model information
+        """
+        return {
             'model_name': self.model_name,
             'temperature': self.temperature,
             'max_tokens': self.max_tokens,
-            'azure_client_available': self.azure_client is not None,
-            'openai_client_available': self.openai_client is not None,
-            'langchain_client_available': self.langchain_client is not None
+            'azure_available': bool(self.azure_client),
+            'openai_available': bool(self.openai_client),
+            'langchain_available': bool(self.langchain_client),
+            'memory_enabled': True,
+            'memory_stats': self.get_memory_stats()
         }
-        
-        # Add provider-specific information
-        if self.azure_client:
-            info['azure_endpoint'] = getattr(settings, 'azure_openai_endpoint', 'Not configured')
-        elif self.openai_client:
-            info['base_url'] = getattr(settings, 'openai_api_base', 'https://api.openai.com/v1')
-        
-        return info
-    
-    def _get_provider_type(self) -> str:
-        """Get the type of provider being used."""
-        if self.azure_client:
-            return "Azure OpenAI"
-        elif self.openai_client:
-            if hasattr(settings, 'azure_openai_endpoint') and settings.azure_openai_endpoint:
-                if "api.yescale.io" in settings.azure_openai_endpoint:
-                    return "YesScale (Third-party)"
-                elif "openai.azure.com" not in settings.azure_openai_endpoint:
-                    return "Third-party Provider"
-            return "OpenAI"
-        else:
-            return "None"
     
     # Function Calling Methods
     def get_available_functions(self) -> List[str]:

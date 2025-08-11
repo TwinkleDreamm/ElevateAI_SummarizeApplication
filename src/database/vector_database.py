@@ -197,7 +197,7 @@ class VectorDatabase:
                     'id': ids[i],
                     'text': text,
                     'added_at': datetime.now().isoformat(),
-                    'embedding_model': self.embedding_generator.model_name
+                    'embedding_model': self.embedding_generator.get_model_info()['embedding_model']
                 }
                 self.metadata_manager.add_metadata(ids[i], enhanced_metadata)
             
@@ -343,7 +343,7 @@ class VectorDatabase:
                 'is_trained': self.is_trained,
                 'total_vectors': self.index.ntotal,
                 'created_at': datetime.now().isoformat(),
-                'embedding_model': self.embedding_generator.model_name
+                'embedding_model': self.embedding_generator.get_model_info()['embedding_model']
             }
             
             with open(save_path / "db_info.json", 'w') as f:

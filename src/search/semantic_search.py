@@ -85,6 +85,13 @@ class SemanticSearchEngine:
             
             # Perform vector search
             raw_results = self.vector_db.search(query, k=k, threshold=threshold)
+
+            # Fallback: if no results above threshold, retry with threshold=0 to surface top-k
+            if not raw_results and threshold is not None and threshold > -1.0:
+                self.logger.info(
+                    f"No results above threshold {threshold}. Retrying with threshold=-1.0 to surface top-k candidates"
+                )
+                raw_results = self.vector_db.search(query, k=k, threshold=-1.0)
             
             # Apply metadata filters
             if filters:

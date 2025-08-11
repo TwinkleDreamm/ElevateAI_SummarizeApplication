@@ -12,7 +12,7 @@ except ImportError:
     WHISPER_AVAILABLE = False
 
 try:
-    import openai
+    from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -128,7 +128,7 @@ class SpeechToTextProcessor(BaseProcessor):
             raise SpeechToTextError("OpenAI client not available. Please install openai.")
         
         try:
-            client = openai.OpenAI(api_key=self.settings.openai_api_key)
+            client = OpenAI(api_key=self.settings.openai_api_key, base_url=self.settings.openai_base_url)
             
             with open(audio_path, "rb") as audio_file:
                 transcript = client.audio.transcriptions.create(

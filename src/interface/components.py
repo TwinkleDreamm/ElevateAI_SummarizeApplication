@@ -41,12 +41,6 @@ class UIComponents:
             # Model settings
             st.subheader("Model Settings")
             
-            use_azure = st.checkbox(
-                "Use Azure OpenAI",
-                value=True,
-                help="Use Azure OpenAI instead of OpenAI API"
-            )
-            
             temperature = st.slider(
                 "Temperature",
                 min_value=0.0,
@@ -72,7 +66,7 @@ class UIComponents:
                 "Similarity Threshold",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.7,
+                value=0.25,
                 step=0.05,
                 help="Minimum similarity for search results"
             )
@@ -162,7 +156,6 @@ class UIComponents:
             )
 
             return {
-                'use_azure': use_azure,
                 'temperature': temperature,
                 'max_tokens': max_tokens,
                 'similarity_threshold': similarity_threshold,
