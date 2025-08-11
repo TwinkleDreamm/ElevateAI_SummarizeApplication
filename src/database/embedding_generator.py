@@ -8,7 +8,7 @@ from pathlib import Path
 import pickle
 
 try:
-    from sentence_transformers import SentenceTransformer
+    # from sentence_transformers import SentenceTransformer
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Sentence Transformers not available: {e}")
@@ -18,7 +18,7 @@ except Exception as e:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 try:
-    import openai
+    from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -43,8 +43,8 @@ class EmbeddingGenerator:
         self.logger = logger
         
         # Model configuration
-        self.model_name = self.config.get('model_name', settings.embedding_model)
-        self.use_openai = self.config.get('use_openai', False)
+        self.model_name = self.config.get('model_name', settings.openai_embedding_model if self.config.get('use_openai', True) else settings.embedding_model)
+        self.use_openai = self.config.get('use_openai', settings.use_openai)
         
         # Initialize models
         self.sentence_transformer = None
@@ -54,23 +54,25 @@ class EmbeddingGenerator:
     
     def _load_models(self) -> None:
         """Load embedding models."""
+        models_loaded = False
+
+        self.logger.info(f"use_openai: {self.use_openai}, OPENAI_AVAILABLE: {OPENAI_AVAILABLE}, settings.openai_api_key: {settings.openai_api_key}")
+        
         if self.use_openai and OPENAI_AVAILABLE and settings.openai_api_key:
             try:
-                self.openai_client = openai.OpenAI(api_key=settings.openai_api_key)
-                self.logger.info("OpenAI embedding client initialized")
+                self.openai_client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+                self.logger.info("✅ OpenAI embedding client initialized")
+                models_loaded = True
+                return  # Exit early if OpenAI is loaded successfully
             except Exception as e:
-                self.logger.warning(f"Failed to initialize OpenAI client: {e}")
+                self.logger.warning(f"❌ Failed to initialize OpenAI client: {e}")
         
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
-            try:
-                self.logger.info(f"Loading sentence transformer model: {self.model_name}")
-                self.sentence_transformer = SentenceTransformer(self.model_name)
-                self.logger.info("Sentence transformer model loaded successfully")
-            except Exception as e:
-                self.logger.error(f"Failed to load sentence transformer: {e}")
-                raise EmbeddingError(f"Failed to load embedding model: {e}")
-        else:
-            raise EmbeddingError("No embedding libraries available. Please install sentence-transformers or configure OpenAI.")
+        if not models_loaded:
+            self.logger.warning("⚠️  No embedding models loaded. Please configure OpenAI API key for embedding functionality.")
+
+    def has_model(self) -> bool:
+        """Return True if either OpenAI client or local model is available."""
+        return (self.use_openai and self.openai_client is not None) or (self.sentence_transformer is not None)
     
     def generate_embedding(self, text: str, **kwargs) -> np.ndarray:
         """
@@ -165,7 +167,7 @@ class EmbeddingGenerator:
         """Generate embedding using OpenAI API."""
         try:
             response = self.openai_client.embeddings.create(
-                model=kwargs.get('model', 'text-embedding-ada-002'),
+                model=kwargs.get('model', settings.openai_embedding_model),
                 input=text
             )
             embedding = np.array(response.data[0].embedding)
@@ -182,7 +184,7 @@ class EmbeddingGenerator:
         try:
             # OpenAI API supports batch processing
             response = self.openai_client.embeddings.create(
-                model=kwargs.get('model', 'text-embedding-ada-002'),
+                model=kwargs.get('model', settings.openai_embedding_model),
                 input=texts
             )
             
@@ -213,7 +215,7 @@ class EmbeddingGenerator:
                 'text-embedding-3-small': 1536,
                 'text-embedding-3-large': 3072
             }
-            return model_dims.get(self.config.get('model', 'text-embedding-ada-002'), 1536)
+            return model_dims.get(self.config.get('model', settings.openai_embedding_model), 1536)
         else:
             return 384  # Default dimension
     

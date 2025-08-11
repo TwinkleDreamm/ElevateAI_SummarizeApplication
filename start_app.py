@@ -9,7 +9,6 @@ import subprocess
 from pathlib import Path
 
 
-
 def check_dependencies():
     """Check if key dependencies are available."""
     try:

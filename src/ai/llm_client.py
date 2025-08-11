@@ -7,7 +7,6 @@ from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 from dataclasses import dataclass
 
 try:
-    import openai
     from openai import AzureOpenAI, OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
@@ -93,7 +92,7 @@ class LLMClient:
             
             # Fallback to OpenAI client
             elif settings.openai_api_key:
-                self.openai_client = OpenAI(api_key=settings.openai_api_key)
+                self.openai_client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
                 self.logger.info("OpenAI client initialized")
                 
                 # Initialize Langchain OpenAI client if available

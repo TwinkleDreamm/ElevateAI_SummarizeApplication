@@ -291,6 +291,16 @@ class StreamlitApp:
                     all_metadata.append(metadata)
             
             if all_chunks:
+                # If no embedding model, skip DB insert with user-friendly warning
+                try:
+                    if hasattr(self.vector_db, 'embedding_generator') and hasattr(self.vector_db.embedding_generator, 'has_model'):
+                        if not self.vector_db.embedding_generator.has_model():
+                            self.logger.warning("No embedding model available. Skipping database insertion.")
+                            UIComponents.render_warning("Embeddings are disabled. Configure OPENAI_API_KEY to enable the vector database.")
+                            return
+                except Exception:
+                    pass
+
                 # Add to vector database
                 self.vector_db.add_to_vectordb(all_chunks, all_metadata)
                 self.logger.info(f"Added {len(all_chunks)} chunks to database")
