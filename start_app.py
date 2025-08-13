@@ -27,7 +27,8 @@ def check_dependencies():
 def start_streamlit_app():
     """Start the Streamlit application."""
     try:
-        app_path = Path(__file__).parent / "src" / "interface" / "streamlit_app.py"
+        # Use the main app entry point
+        app_path = Path(__file__).parent / "src" / "interface" / "app.py"
         
         print("🚀 Starting ElevateAI Streamlit application...")
         print("📱 Open your browser to: http://localhost:8501")

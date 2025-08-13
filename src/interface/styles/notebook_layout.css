@@ -1,0 +1,235 @@
+/* Custom CSS for Notebook 3-tab layout */
+
+/* Main container styling */
+.main .block-container {
+    max-width: 100%;
+    padding: 1rem;
+}
+
+/* Tab styling */
+[data-testid="stTabs"] {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem 0;
+    border: 1px solid #e9ecef;
+}
+
+/* Tab content styling */
+[data-testid="stTabs"] [data-testid="stTabsContent"] {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    border: 1px solid #e9ecef;
+    min-height: 600px;
+}
+
+/* Tab-specific styling */
+.tab-sources {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.tab-notebook {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.tab-studio {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Tab navigation styling */
+.stTabs [data-baseweb="tab-list"] {
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+    padding: 0.5rem;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background: white;
+    border-radius: 6px;
+    margin: 0 0.25rem;
+    padding: 0.75rem 1rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    transition: all 0.2s ease;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background: #e9ecef;
+    transform: translateY(-1px);
+}
+
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background: #007bff;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,123,255,0.3);
+}
+
+/* Source item styling */
+.source-item {
+    background: white;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    border-left: 4px solid #667eea;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.source-item:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+/* Note item styling */
+.note-item {
+    background: white;
+    border-radius: 6px;
+    padding: 0.75rem;
+    margin: 0.5rem 0;
+    border-left: 4px solid #f093fb;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.note-item:hover {
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    transform: translateY(-1px);
+}
+
+/* Button styling */
+.stButton > button {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Save note button */
+.save-note-btn {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.save-note-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(67, 233, 123, 0.3);
+}
+
+/* Action buttons */
+.action-btn {
+    border-radius: 4px;
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+    margin: 0.25rem;
+}
+
+/* Tab content headers */
+.tab-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.tab-header h3 {
+    margin: 0;
+    color: #333;
+    font-weight: 600;
+}
+
+/* Chat area styling */
+.chat-area {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+/* Answer area styling */
+.answer-area {
+    background: white;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-left: 4px solid #007bff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Responsive design */
+@media (max-width: 1200px) {
+    [data-testid="stTabs"] {
+        margin: 0.25rem 0;
+        padding: 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .main .block-container {
+        padding: 0.5rem;
+    }
+    
+    [data-testid="stTabs"] {
+        margin: 0.25rem 0;
+        padding: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Animation for panel transitions */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.panel-content {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
