@@ -150,7 +150,7 @@ class VectorDatabase:
                     'id': ids[i],
                     'text': text,
                     'added_at': datetime.now().isoformat(),
-                    'embedding_model': self.embedding_generator.model_name
+                    'embedding_model': getattr(self.embedding_generator, 'local_model_name', 'unknown') if not self.embedding_generator.use_openai else getattr(self.embedding_generator, 'openai_model_name', 'text-embedding-ada-002')
                 }
                 self.metadata_manager.add_metadata(ids[i], enhanced_metadata)
             
@@ -286,7 +286,7 @@ class VectorDatabase:
                 'is_trained': self.is_trained,
                 'total_vectors': self.index.ntotal,
                 'created_at': datetime.now().isoformat(),
-                'embedding_model': self.embedding_generator.model_name
+                'embedding_model': getattr(self.embedding_generator, 'local_model_name', 'unknown') if not self.embedding_generator.use_openai else getattr(self.embedding_generator, 'openai_model_name', 'text-embedding-ada-002')
             }
             
             with open(save_path / "db_info.json", 'w') as f:

@@ -130,6 +130,31 @@ cython_debug/
 *.swo
 *~
 
+# ElevateAI specific
+data/cache/
+data/vectordb/
+data/embedding_cache/
+data/llm_cache/
+logs/*.log
+temp/
+*.tmp
+.streamlit/
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model files (large)
+*.bin
+*.safetensors
+*.onnx
+models/
+
+# Temporary test files
+quick_test.py
+test_*.py
+
 # Emacs
 *~
 \#*\#

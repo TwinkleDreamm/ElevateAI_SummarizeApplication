@@ -33,7 +33,9 @@ def main():
         logger.info(f"Project root: {project_root}")
         logger.info(f"Python path: {sys.path}")
         
-        # Start Streamlit app
+        # Start Streamlit app (default)
+        print("🚀 Starting ElevateAI with Streamlit UI...")
+        print("📝 For FastAPI + HTML: uvicorn src.server.main:app --reload --port 8000")
         streamlit_main()
         
     except KeyboardInterrupt:

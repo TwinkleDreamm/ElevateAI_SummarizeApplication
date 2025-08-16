@@ -21,13 +21,14 @@ if requirements_path.exists():
 setup(
     name="elevateai",
     version="1.0.0",
-    description="AI-powered content analysis and summarization application with memory system",
+    description="AI-powered document processing and summarization with Streamlit + FastAPI",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="ElevateAI Team",
     author_email="team@elevateai.com",
-    url="https://github.com/elevateai/elevateai",
-    packages=find_packages(),
+    url="https://github.com/TwinkleDreamm/ElevateAI_SummarizeApplication",
+    packages=find_packages(where=".", include=["src*", "config*"]),
+    package_dir={"": "."},
     include_package_data=True,
     install_requires=requirements,
     python_requires=">=3.9",
@@ -50,14 +51,35 @@ setup(
         "Topic :: Office/Business :: Office Suites",
     ],
     keywords="ai, summarization, nlp, text analysis, memory system, streamlit, langchain",
+    extras_require={
+        "dev": [
+            "black>=23.0.0",
+            "isort>=5.12.0",
+            "flake8>=6.0.0",
+            "mypy>=1.0.0",
+            "pytest>=7.0.0",
+            "pytest-cov>=4.0.0",
+            "pytest-asyncio>=0.21.0",
+        ],
+        "full": [
+            "moviepy>=1.0.3",  # Video processing
+            "torch>=2.0.0",    # Advanced ML models
+        ],
+    },
     entry_points={
         "console_scripts": [
             "elevateai=main:main",
         ],
     },
     project_urls={
-        "Bug Reports": "https://github.com/elevateai/elevateai/issues",
-        "Source": "https://github.com/elevateai/elevateai",
-        "Documentation": "https://github.com/elevateai/elevateai/wiki",
+        "Bug Reports": "https://github.com/TwinkleDreamm/ElevateAI_SummarizeApplication/issues",
+        "Source": "https://github.com/TwinkleDreamm/ElevateAI_SummarizeApplication",
+        "Documentation": "https://github.com/TwinkleDreamm/ElevateAI_SummarizeApplication/wiki",
     },
+    package_data={
+        "": ["*.txt", "*.md", "*.yml", "*.yaml", "*.json", "*.toml"],
+        "config": ["*.py"],
+        "data": [".gitkeep"],
+    },
+    zip_safe=False,
 )

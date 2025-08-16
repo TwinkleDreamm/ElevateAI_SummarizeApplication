@@ -1,30 +1,22 @@
 """
-Main Streamlit application for ElevateAI.
+Streamlit web application for ElevateAI.
 """
-try:
-    import streamlit as st
-    STREAMLIT_AVAILABLE = True
-except ImportError:
-    STREAMLIT_AVAILABLE = False
-
-import asyncio
-from typing import List, Dict, Any, Optional
-from pathlib import Path
-import time
+import streamlit as st
 import tempfile
 import os
-
-from config.settings import settings
-from src.utils.logger import logger
-from src.utils.exceptions import ElevateAIException
-from src.interface.components import UIComponents
+from pathlib import Path
+from typing import Optional, Dict, Any, List
+import time
 
 # Import core modules
-from src.core import AudioProcessor, VideoProcessor, DocumentProcessor, SpeechToTextProcessor
-from src.analysis import TextAnalyzer, TextCleaner, TextChunker
-from src.database import VectorDatabase, EmbeddingGenerator
-from src.search import SemanticSearchEngine, RetrievalEngine, WebSearchEngine
-from src.ai import LLMClient, PromptEngineer, Summarizer, MultiModalAI
+from src.core.document_processor import DocumentProcessor
+from src.core.speech_to_text import SpeechToTextProcessor
+from src.ai.summarizer import Summarizer
+from src.search.semantic_search import SemanticSearchEngine
+from src.database.vector_database import VectorDatabase
+from src.utils.logger import logger
+from src.utils.memory import MemoryManager
+from config.settings import settings
 
 
 class StreamlitApp:
@@ -32,425 +24,339 @@ class StreamlitApp:
     
     def __init__(self):
         """Initialize the Streamlit application."""
-        if not STREAMLIT_AVAILABLE:
-            raise ImportError("Streamlit not available. Please install streamlit package.")
-        
-        self.logger = logger
-        self.settings = settings
-        
-        # Initialize components
-        self._initialize_components()
-        
-        # Initialize session state
-        self._initialize_session_state()
+        self.setup_page_config()
+        self.initialize_components()
+        self.setup_session_state()
     
-    def _initialize_components(self):
-        """Initialize all application components."""
+    def setup_page_config(self):
+        """Configure Streamlit page settings."""
+        st.set_page_config(
+            page_title="ElevateAI",
+            page_icon="🚀",
+            layout="wide",
+            initial_sidebar_state="expanded"
+        )
+    
+    def initialize_components(self):
+        """Initialize core components."""
         try:
-            # Core processors
-            self.audio_processor = AudioProcessor()
-            self.video_processor = VideoProcessor()
             self.document_processor = DocumentProcessor()
-            self.speech_processor = SpeechToTextProcessor()
-            
-            # Analysis components
-            self.text_analyzer = TextAnalyzer()
-            self.text_cleaner = TextCleaner()
-            self.text_chunker = TextChunker()
-            
-            # Database and search
-            self.vector_db = VectorDatabase()
-            self.embedding_generator = EmbeddingGenerator()
+            self.stt_processor = SpeechToTextProcessor()
+            self.summarizer = Summarizer()
             self.search_engine = SemanticSearchEngine()
-            self.retrieval_engine = RetrievalEngine()
-            self.web_search = WebSearchEngine()
-            
-            # AI components (with graceful fallback)
-            try:
-                self.llm_client = LLMClient()
-                self.logger.info("LLM client initialized")
-            except Exception as e:
-                self.logger.warning(f"LLM client initialization failed: {e}")
-                self.llm_client = None
-
-            try:
-                self.prompt_engineer = PromptEngineer()
-                self.summarizer = Summarizer()
-                self.logger.info("Text processing components initialized")
-            except Exception as e:
-                self.logger.warning(f"Text processing components failed: {e}")
-                self.prompt_engineer = None
-                self.summarizer = None
-
-            try:
-                self.multimodal_ai = MultiModalAI()
-                self.logger.info("Multimodal AI initialized")
-            except Exception as e:
-                self.logger.warning(f"Multimodal AI initialization failed: {e}")
-                self.multimodal_ai = None
-            
-            self.logger.info("All components initialized successfully")
-            
+            self.vector_db = VectorDatabase()
+            self.memory_manager = MemoryManager()
         except Exception as e:
-            self.logger.error(f"Failed to initialize components: {e}")
-            st.error(f"Failed to initialize application components: {e}")
+            st.error(f"Failed to initialize components: {e}")
+            logger.error(f"Component initialization failed: {e}")
     
-    def _initialize_session_state(self):
-        """Initialize Streamlit session state."""
+    def setup_session_state(self):
+        """Initialize session state variables."""
         if 'processed_files' not in st.session_state:
             st.session_state.processed_files = []
+        if 'search_results' not in st.session_state:
+            st.session_state.search_results = []
+        if 'conversation_history' not in st.session_state:
+            st.session_state.conversation_history = []
+    
+    def render_sidebar(self):
+        """Render the sidebar with navigation and settings."""
+        with st.sidebar:
+            st.title("🚀 ElevateAI")
+            st.markdown("---")
+            
+            # Navigation
+            page = st.selectbox(
+                "Choose a feature:",
+                ["📄 Document Processing", "🔍 Search & Summarize", "🎤 Speech to Text", "💾 Database Management"]
+            )
+            
+            st.markdown("---")
+            
+            # Settings
+            st.subheader("⚙️ Settings")
+            
+            # Model settings
+            use_openai = st.checkbox("Use OpenAI Models", value=True, help="Use online OpenAI models for better performance")
+            
+            if use_openai:
+                st.info("🌐 Using online models (faster, no downloads)")
+            else:
+                st.warning("💾 Using local models (slower startup)")
+            
+            # Database stats
+            try:
+                stats = self.vector_db.get_database_stats()
+                st.subheader("📊 Database Stats")
+                st.metric("Documents", stats.get('total_vectors', 0))
+                st.metric("Embedding Dim", stats.get('embedding_dimension', 0))
+            except Exception as e:
+                st.error(f"Failed to load stats: {e}")
+            
+            return page
+    
+    def render_document_processing(self):
+        """Render document processing interface."""
+        st.header("📄 Document Processing")
         
-        if 'current_summary' not in st.session_state:
-            st.session_state.current_summary = None
+        col1, col2 = st.columns([2, 1])
         
-        if 'processing_history' not in st.session_state:
-            st.session_state.processing_history = []
+        with col1:
+            st.subheader("Upload Documents")
+            uploaded_files = st.file_uploader(
+                "Choose files",
+                accept_multiple_files=True,
+                type=['pdf', 'docx', 'txt', 'mp4', 'mp3', 'wav']
+            )
+            
+            if uploaded_files:
+                for uploaded_file in uploaded_files:
+                    if st.button(f"Process {uploaded_file.name}"):
+                        with st.spinner(f"Processing {uploaded_file.name}..."):
+                            try:
+                                # Save uploaded file temporarily
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp_file:
+                                    tmp_file.write(uploaded_file.getvalue())
+                                    tmp_path = tmp_file.name
+                                
+                                # Process the file
+                                result = self.document_processor.process_file(tmp_path)
+                                
+                                # Add to vector database
+                                if result.chunks:
+                                    metadata_list = [{"source": uploaded_file.name, "chunk_id": i} for i in range(len(result.chunks))]
+                                    self.vector_db.add_to_vectordb(result.chunks, metadata_list)
+                                
+                                st.success(f"✅ Processed {uploaded_file.name} - {len(result.chunks)} chunks added")
+                                st.session_state.processed_files.append(uploaded_file.name)
+                                
+                                # Clean up
+                                os.unlink(tmp_path)
+                                
+                            except Exception as e:
+                                st.error(f"❌ Error processing {uploaded_file.name}: {e}")
         
-        if 'vector_db_stats' not in st.session_state:
-            st.session_state.vector_db_stats = {}
+        with col2:
+            st.subheader("📝 Add Text Directly")
+            text_input = st.text_area("Enter text to add to database:", height=200)
+            
+            if st.button("Add Text"):
+                if text_input.strip():
+                    try:
+                        # Split into chunks if needed
+                        chunks = [text_input.strip()]
+                        metadata_list = [{"source": "manual_input", "type": "text"}]
+                        
+                        self.vector_db.add_to_vectordb(chunks, metadata_list)
+                        st.success("✅ Text added to database")
+                    except Exception as e:
+                        st.error(f"❌ Error adding text: {e}")
+                else:
+                    st.warning("Please enter some text")
+    
+    def render_search_summarize(self):
+        """Render search and summarization interface."""
+        st.header("🔍 Search & Summarize")
+        
+        # Search section
+        st.subheader("Search Documents")
+        query = st.text_input("Enter your search query:")
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
+        with col1:
+            search_button = st.button("🔍 Search", type="primary")
+        with col2:
+            k = st.number_input("Results", min_value=1, max_value=50, value=10)
+        with col3:
+            threshold = st.number_input("Threshold", min_value=0.0, max_value=1.0, value=0.0, step=0.1)
+        
+        if search_button and query:
+            with st.spinner("Searching..."):
+                try:
+                    results = self.search_engine.search(query, k=k, threshold=threshold)
+                    st.session_state.search_results = results
+                    
+                    if results:
+                        st.success(f"Found {len(results)} results")
+                        
+                        # Display results
+                        for i, result in enumerate(results):
+                            with st.expander(f"Result {i+1} (Score: {result['score']:.3f})"):
+                                st.write(result['metadata'].get('text', 'No text available'))
+                                st.caption(f"Source: {result['metadata'].get('source', 'Unknown')}")
+                    else:
+                        st.warning("No results found")
+                        
+                except Exception as e:
+                    st.error(f"Search failed: {e}")
+        
+        # Summarization section
+        st.markdown("---")
+        st.subheader("Summarize Results")
+        
+        if st.session_state.search_results:
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                focus_query = st.text_input("Focus topic (optional):", placeholder="What aspect to focus on?")
+            
+            with col2:
+                summarize_button = st.button("📝 Summarize", type="primary")
+            
+            if summarize_button:
+                with st.spinner("Generating summary..."):
+                    try:
+                        # Prepare chunks for summarization
+                        chunks = []
+                        for result in st.session_state.search_results:
+                            chunks.append({
+                                "text": result['metadata'].get('text', ''),
+                                "source": result['metadata'].get('source', 'Unknown')
+                            })
+                        
+                        # Generate summary
+                        summary_result = self.summarizer.summarize_chunks(
+                            chunks, 
+                            query=focus_query if focus_query else query
+                        )
+                        
+                        # Display summary
+                        st.markdown("### 📋 Summary")
+                        st.markdown(summary_result.summary)
+                        
+                        # Summary stats
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Word Count", getattr(summary_result, 'word_count', 'N/A'))
+                        with col2:
+                            st.metric("Compression", f"{getattr(summary_result, 'compression_ratio', 0):.1%}")
+                        with col3:
+                            st.metric("Sources", len(chunks))
+                        
+                    except Exception as e:
+                        st.error(f"Summarization failed: {e}")
+        else:
+            st.info("Search for documents first to enable summarization")
+    
+    def render_speech_to_text(self):
+        """Render speech-to-text interface."""
+        st.header("🎤 Speech to Text")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.subheader("Upload Audio File")
+            audio_file = st.file_uploader(
+                "Choose an audio file",
+                type=['mp3', 'wav', 'mp4', 'm4a', 'ogg']
+            )
+            
+            if audio_file:
+                st.audio(audio_file)
+                
+                if st.button("🎤 Transcribe", type="primary"):
+                    with st.spinner("Transcribing audio..."):
+                        try:
+                            # Save uploaded file temporarily
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(audio_file.name).suffix) as tmp_file:
+                                tmp_file.write(audio_file.getvalue())
+                                tmp_path = tmp_file.name
+                            
+                            # Process audio
+                            result = self.stt_processor.process(tmp_path)
+                            
+                            # Display results
+                            st.subheader("📝 Transcription")
+                            st.text_area("Transcribed text:", value=result.get('text', ''), height=200)
+                            
+                            # Add to database option
+                            if st.button("Add transcription to database"):
+                                chunks = [result.get('text', '')]
+                                metadata_list = [{"source": audio_file.name, "type": "transcription"}]
+                                self.vector_db.add_to_vectordb(chunks, metadata_list)
+                                st.success("✅ Transcription added to database")
+                            
+                            # Clean up
+                            os.unlink(tmp_path)
+                            
+                        except Exception as e:
+                            st.error(f"Transcription failed: {e}")
+        
+        with col2:
+            st.subheader("ℹ️ Info")
+            st.info("""
+            **Supported formats:**
+            - MP3, WAV, MP4, M4A, OGG
+            
+            **Features:**
+            - Automatic language detection
+            - High-quality transcription
+            - Direct database integration
+            """)
+    
+    def render_database_management(self):
+        """Render database management interface."""
+        st.header("💾 Database Management")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📊 Database Statistics")
+            try:
+                stats = self.vector_db.get_database_stats()
+                
+                st.metric("Total Vectors", stats.get('total_vectors', 0))
+                st.metric("Embedding Dimension", stats.get('embedding_dimension', 0))
+                st.metric("Index Type", stats.get('index_type', 'Unknown'))
+                st.metric("Database Path", stats.get('database_path', 'Unknown'))
+                
+            except Exception as e:
+                st.error(f"Failed to load database stats: {e}")
+        
+        with col2:
+            st.subheader("🔧 Database Actions")
+            
+            if st.button("💾 Save Database", type="secondary"):
+                try:
+                    self.vector_db.save_database()
+                    st.success("✅ Database saved successfully")
+                except Exception as e:
+                    st.error(f"Failed to save database: {e}")
+            
+            if st.button("🗑️ Clear Database", type="secondary"):
+                if st.checkbox("I understand this will delete all data"):
+                    try:
+                        self.vector_db.clear_database()
+                        st.success("✅ Database cleared successfully")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to clear database: {e}")
     
     def run(self):
         """Run the Streamlit application."""
         try:
-            # Render header
-            UIComponents.render_header()
+            # Render sidebar and get selected page
+            page = self.render_sidebar()
             
-            # Render sidebar and get configuration
-            config = UIComponents.render_sidebar()
-            
-            # Main interface
-            self._render_main_interface(config)
-            
-        except Exception as e:
-            self.logger.error(f"Application error: {e}")
-            UIComponents.render_error(f"Application error: {e}")
-    
-    def _render_main_interface(self, config: Dict[str, Any]):
-        """Render the main application interface."""
-        # File upload section
-        uploaded_files, url_input = UIComponents.render_file_uploader()
-        
-        # Process files if uploaded
-        if uploaded_files or url_input:
-            if st.button("🚀 Process Content", type="primary"):
-                self._process_content(uploaded_files, url_input, config)
-        
-        # Query interface
-        query_config = UIComponents.render_query_interface()
-        
-        # Process query if provided
-        if query_config['query'] and st.button("💡 Get Answer", type="primary"):
-            self._process_query(query_config, config)
-        
-        # Display current results
-        if st.session_state.current_summary:
-            self._display_results(config)
-        
-        # Display database stats
-        if st.session_state.vector_db_stats:
-            UIComponents.render_database_stats(st.session_state.vector_db_stats)
-        
-        # Display memory and history
-        UIComponents.render_memory_stats()
-        UIComponents.render_conversation_history()
-        UIComponents.render_processing_history()
-    
-    def _process_content(self, uploaded_files: List, url_input: str, config: Dict[str, Any]):
-        """Process uploaded content."""
-        try:
-            UIComponents.render_processing_status("Processing content...", 0.1)
-            
-            processed_texts = []
-            
-            # Process uploaded files
-            if uploaded_files:
-                for i, file in enumerate(uploaded_files):
-                    progress = 0.1 + (0.4 * i / len(uploaded_files))
-                    UIComponents.render_processing_status(f"Processing {file.name}...", progress)
-                    
-                    text = self._process_single_file(file)
-                    if text:
-                        processed_texts.append({
-                            'text': text,
-                            'source': file.name,
-                            'type': file.type
-                        })
-            
-            # Process URL
-            if url_input:
-                UIComponents.render_processing_status("Processing URL...", 0.6)
-                text = self._process_url(url_input)
-                if text:
-                    processed_texts.append({
-                        'text': text,
-                        'source': url_input,
-                        'type': 'url'
-                    })
-            
-            if processed_texts:
-                # Add to vector database
-                UIComponents.render_processing_status("Adding to database...", 0.8)
-                self._add_to_database(processed_texts)
-                
-                UIComponents.render_processing_status("Complete!", 1.0)
-                UIComponents.render_success(f"Successfully processed {len(processed_texts)} items")
-                
-                # Update database stats
-                st.session_state.vector_db_stats = self.vector_db.get_database_stats()
-            else:
-                UIComponents.render_warning("No content could be processed")
-                
-        except Exception as e:
-            self.logger.error(f"Content processing failed: {e}")
-            UIComponents.render_error(f"Content processing failed: {e}")
-    
-    def _process_single_file(self, file) -> Optional[str]:
-        """Process a single uploaded file."""
-        try:
-            # Save file temporarily
-            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.name).suffix) as tmp_file:
-                tmp_file.write(file.read())
-                tmp_path = Path(tmp_file.name)
-            
-            try:
-                # Determine file type and process accordingly
-                file_extension = tmp_path.suffix.lower()
-                
-                if file_extension in ['.mp4', '.avi', '.mov', '.mkv']:
-                    # Video processing
-                    audio_path = self.video_processor.extract_audio(tmp_path)
-                    transcript_result = self.speech_processor.process(audio_path)
-                    return transcript_result['text']
-                
-                elif file_extension in ['.mp3', '.wav', '.m4a']:
-                    # Audio processing
-                    processed_audio = self.audio_processor.process(tmp_path)
-                    transcript_result = self.speech_processor.process(processed_audio)
-                    return transcript_result['text']
-                
-                elif file_extension in ['.pdf', '.docx', '.txt']:
-                    # Document processing
-                    return self.document_processor.process(tmp_path)
-                
-                else:
-                    self.logger.warning(f"Unsupported file type: {file_extension}")
-                    return None
-                    
-            finally:
-                # Clean up temporary file
-                if tmp_path.exists():
-                    os.unlink(tmp_path)
-                    
-        except Exception as e:
-            self.logger.error(f"Failed to process file {file.name}: {e}")
-            return None
-    
-    def _process_url(self, url: str) -> Optional[str]:
-        """Process a URL (YouTube or web page)."""
-        try:
-            if 'youtube.com' in url or 'youtu.be' in url:
-                # YouTube processing would require additional libraries
-                UIComponents.render_warning("YouTube processing not yet implemented")
-                return None
-            else:
-                # Web page processing
-                return self.document_processor.extract_text_from_url(url)
-                
-        except Exception as e:
-            self.logger.error(f"Failed to process URL {url}: {e}")
-            return None
-    
-    def _add_to_database(self, processed_texts: List[Dict[str, Any]]):
-        """Add processed texts to vector database."""
-        try:
-            all_chunks = []
-            all_metadata = []
-            
-            for item in processed_texts:
-                # Clean text
-                cleaned_text = self.text_cleaner.clean_text(item['text'])
-                
-                # Analyze content
-                analysis = self.text_analyzer.analyze_text(cleaned_text)
-                
-                if analysis.status == 'no_content':
-                    continue
-                
-                # Chunk text
-                chunks = self.text_chunker.split_into_chunks(cleaned_text)
-                
-                for chunk in chunks:
-                    all_chunks.append(chunk.content)
-                    metadata = {
-                        'source': item['source'],
-                        'content_type': item['type'],
-                        'chunk_id': chunk.chunk_id,
-                        'word_count': chunk.word_count,
-                        'analysis_status': analysis.status
-                    }
-                    all_metadata.append(metadata)
-            
-            if all_chunks:
-                # Add to vector database
-                self.vector_db.add_to_vectordb(all_chunks, all_metadata)
-                self.logger.info(f"Added {len(all_chunks)} chunks to database")
+            # Render main content based on selected page
+            if page == "📄 Document Processing":
+                self.render_document_processing()
+            elif page == "🔍 Search & Summarize":
+                self.render_search_summarize()
+            elif page == "🎤 Speech to Text":
+                self.render_speech_to_text()
+            elif page == "💾 Database Management":
+                self.render_database_management()
             
         except Exception as e:
-            self.logger.error(f"Failed to add to database: {e}")
-            raise
-    
-    def _process_query(self, query_config: Dict[str, Any], config: Dict[str, Any]):
-        """Process user query."""
-        try:
-            query = query_config['query']
-            UIComponents.render_processing_status("Searching for relevant content...", 0.2)
-            
-            start_time = time.time()
-            
-            # Perform search
-            if config.get('enable_web_search'):
-                # Use web search fallback
-                local_results = self.search_engine.search(query, k=config['max_results'])
-                results, used_web = self.web_search.fallback_search(query, local_results)
-            else:
-                # Local search only
-                search_results = self.search_engine.search(
-                    query,
-                    k=config['max_results'],
-                    threshold=config['similarity_threshold']
-                )
-                results = [
-                    {
-                        'text': result.text,
-                        'score': result.score,
-                        'metadata': result.metadata
-                    }
-                    for result in search_results
-                ]
-                used_web = False
-            
-            if not results:
-                UIComponents.render_warning("No relevant content found for your query")
-                return
-            
-            UIComponents.render_processing_status("Generating summary...", 0.6)
-            
-            # Generate summary with memory context
-            summary_result = self.summarizer.summarize_chunks(
-                results,
-                query=query,
-                use_chain_of_thought=query_config['use_chain_of_thought']
-            )
-
-            # Generate LLM response with memory integration
-            from src.ai.prompt_engineer import PromptEngineer
-            prompt_engineer = PromptEngineer()
-
-            # Build context-aware prompt
-            if config.get('enable_memory', True):
-                messages = prompt_engineer.build_qa_prompt(
-                    context=summary_result.summary,
-                    question=query,
-                    use_chain_of_thought=query_config['use_chain_of_thought']
-                )
-
-                # Generate enhanced response with memory
-                enhanced_response = self.llm_client.generate_response(
-                    messages,
-                    use_memory=True,
-                    store_in_memory=config.get('store_conversations', True),
-                    max_memory_context=config.get('max_memory_context', 3),
-                    context_sources=[r.get('metadata', {}).get('source', 'unknown') for r in results]
-                )
-
-                # Use enhanced response as final summary
-                final_summary = enhanced_response.content
-            else:
-                final_summary = summary_result.summary
-            
-            processing_time = time.time() - start_time
-            
-            # Store results in session state
-            st.session_state.current_summary = {
-                'summary': final_summary,
-                'sources': results,
-                'confidence_score': summary_result.confidence_score,
-                'processing_time': processing_time,
-                'used_web_search': used_web,
-                'query': query,
-                'used_memory': config.get('enable_memory', True)
-            }
-            
-            # Add to history
-            UIComponents.add_to_history(query, summary_result.summary)
-            
-            UIComponents.render_processing_status("Complete!", 1.0)
-            
-        except Exception as e:
-            self.logger.error(f"Query processing failed: {e}")
-            UIComponents.render_error(f"Query processing failed: {e}")
-    
-    def _display_results(self, config: Dict[str, Any]):
-        """Display processing results."""
-        try:
-            result = st.session_state.current_summary
-            
-            # Display main results
-            UIComponents.render_results(
-                summary=result['summary'],
-                sources=result['sources'],
-                confidence_score=result['confidence_score'],
-                processing_time=result['processing_time']
-            )
-            
-            # Web search warning
-            if result.get('used_web_search'):
-                UIComponents.render_warning(
-                    "Some results include web search content. Please verify information from external sources."
-                )
-            
-            # Generate multi-modal content
-            audio_data = None
-            image_data = None
-            
-            if config.get('enable_tts'):
-                try:
-                    tts_result = self.multimodal_ai.create_audio_summary(
-                        result['summary'],
-                        voice=config.get('tts_voice', 'alloy')
-                    )
-                    audio_data = tts_result.audio_data
-                except Exception as e:
-                    self.logger.warning(f"TTS generation failed: {e}")
-            
-            if config.get('enable_image_gen'):
-                try:
-                    image_result = self.multimodal_ai.create_summary_visualization(
-                        result['summary']
-                    )
-                    image_data = image_result.image_data
-                except Exception as e:
-                    self.logger.warning(f"Image generation failed: {e}")
-            
-            # Download options
-            UIComponents.render_download_options(
-                summary=result['summary'],
-                audio_data=audio_data,
-                image_data=image_data
-            )
-            
-        except Exception as e:
-            self.logger.error(f"Failed to display results: {e}")
-            UIComponents.render_error(f"Failed to display results: {e}")
+            st.error(f"Application error: {e}")
+            logger.error(f"Streamlit app error: {e}")
 
 
 def main():
-    """Main entry point for Streamlit app."""
-    try:
-        app = StreamlitApp()
-        app.run()
-    except Exception as e:
-        st.error(f"Failed to start application: {e}")
+    """Main entry point for the Streamlit application."""
+    app = StreamlitApp()
+    app.run()
 
 
 if __name__ == "__main__":

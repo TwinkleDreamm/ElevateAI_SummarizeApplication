@@ -12,7 +12,7 @@ ElevateAI is an advanced AI-powered application that provides intelligent analys
 - **Semantic Search**: Multi-hop retrieval with reranking capabilities
 - **Web Fallback**: Automatic web search when local content is insufficient
 - **Multi-modal AI**: Text-to-speech, speech-to-text, image generation (when API configured)
-- **Interactive Interface**: User-friendly Streamlit web application
+- **Modern Architecture**: Streamlit (rich frontend) + FastAPI (backend API)
 - **Lightweight & Fast**: Minimal local storage, fast startup, online model prioritization
 
 ## 🏗️ Architecture
@@ -44,10 +44,10 @@ The application follows an Object-Oriented Programming (OOP) design with the fol
    - Function calling
    - Prompt engineering
 
-6. **Web Interface** (`src/interface/`)
-   - Streamlit application
-   - File upload handling
-   - Result visualization
+6. **Web Interface** (`src/interface/` + `src/server/`)
+   - Streamlit rich UI with sidebar navigation
+   - FastAPI backend with REST API endpoints
+   - Clean separation: Frontend (Streamlit) + Backend (FastAPI)
 
 ## 🛠️ Technology Stack
 - **Audio/Video Processing**: moviepy, ffmpeg-python, whisper
@@ -95,21 +95,32 @@ ElevateAI is optimized for **online AI models** to provide:
 - ⚠️ **Requires internet** and API keys for full functionality
 
 ### Quick Setup
+
+**🚀 Install & Run (Recommended):**
+```bash
+git clone https://github.com/TwinkleDreamm/ElevateAI_SummarizeApplication.git
+cd ElevateAI_SummarizeApplication
+pip install -e .
+elevateai
+```
+
+**📖 Detailed Instructions:** See [INSTALL.md](INSTALL.md)
+
+**🎯 Quick Start:**
+1. **Streamlit UI**: `elevateai` or `python main.py`
+2. **FastAPI API**: `uvicorn src.server.main:app --reload`
+
+---
+
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
-   cd Project_1
+   git clone https://github.com/TwinkleDreamm/ElevateAI_SummarizeApplication.git
+   cd ElevateAI_SummarizeApplication
    ```
 
-2. **Create and activate conda environment**
+2. **Install the package**
    ```bash
-   conda create -n Project_1 python=3.11
-   conda activate Project_1
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
 3. **Configure environment variables (optional)**
@@ -127,10 +138,11 @@ ElevateAI is optimized for **online AI models** to provide:
    - Set JAVA_HOME environment variable
    - Add Java to PATH
 
-5. **Run the application**
+4. **Run the application**
    ```bash
-   conda activate Project_1
-   python start_app.py
+   elevateai
+   # Or: python main.py
+   # Opens automatically in browser
    ```
 
 ### Manual Setup

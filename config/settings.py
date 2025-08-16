@@ -3,6 +3,7 @@ Configuration settings for ElevateAI application.
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 from typing import List, Optional
 
 
@@ -10,6 +11,11 @@ class Settings:
     """Application settings with environment variable support."""
 
     def __init__(self):
+        # Load .env file
+        load_dotenv()
+
+        # Project paths handled by @property below
+
         # Application Settings
         self.app_name = os.getenv("APP_NAME", "ElevateAI")
         self.app_version = os.getenv("APP_VERSION", "1.0.0")
