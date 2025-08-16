@@ -71,13 +71,57 @@ def ingest_url(notebook_id: str, url: str) -> int:
     ctx = get_context()
     if not url:
         return 0
+    
+    # Check if it's a YouTube URL
     if "youtube.com" in url or "youtu.be" in url:
-        # YouTube pipeline can be implemented later
+        try:
+            # Process YouTube video
+            youtube_result = ctx["youtube_processor"].process(url)
+            
+            if youtube_result and youtube_result.get("text"):
+                # Add metadata for better context
+                metadata = youtube_result.get("metadata", {})
+                source_info = {
+                    "text": youtube_result["text"],
+                    "source": url,
+                    "type": "youtube",
+                    "notebook_id": notebook_id,
+                    "youtube_title": metadata.get("title", ""),
+                    "youtube_author": metadata.get("uploader", ""),
+                    "youtube_duration": metadata.get("duration", 0),
+                    "youtube_upload_date": metadata.get("upload_date", ""),
+                }
+                
+                return _commit_processed_texts([source_info])
+            else:
+                # If no transcript available, try to get basic info
+                video_info = ctx["youtube_processor"].get_video_info(url)
+                basic_text = f"Video: {video_info.get('title', 'Unknown')} by {video_info.get('uploader', 'Unknown')}. Duration: {video_info.get('duration', 0)} seconds. Upload date: {video_info.get('upload_date', 'Unknown')}."
+                
+                return _commit_processed_texts([
+                    {"text": basic_text, "source": url, "type": "youtube", "notebook_id": notebook_id}
+                ])
+                
+        except Exception as e:
+            # Fallback to basic URL processing if YouTube processing fails
+            logger.warning(f"YouTube processing failed for {url}: {e}")
+            try:
+                text = ctx["document_processor"].extract_text_from_url(url)
+                return _commit_processed_texts([
+                    {"text": text, "source": url, "type": "url", "notebook_id": notebook_id}
+                ])
+            except Exception:
+                return 0
+    
+    # Process regular URLs
+    try:
+        text = ctx["document_processor"].extract_text_from_url(url)
+        return _commit_processed_texts([
+            {"text": text, "source": url, "type": "url", "notebook_id": notebook_id}
+        ])
+    except Exception as e:
+        logger.warning(f"URL processing failed for {url}: {e}")
         return 0
-    text = ctx["document_processor"].extract_text_from_url(url)
-    return _commit_processed_texts([
-        {"text": text, "source": url, "type": "url", "notebook_id": notebook_id}
-    ])
 
 
 def _commit_processed_texts(processed_texts: List[Dict[str, Any]]) -> int:

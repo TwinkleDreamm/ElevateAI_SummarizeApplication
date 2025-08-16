@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 from typing import List
+from datetime import datetime
 
 import streamlit as st
 
 from src.interface.notebooks import store
 from src.interface.app_context import get_context
-from src.interface.pages.notebook_ui import NotebookUI
+from src.interface.utils.notebook_ui import NotebookUI
+from src.interface.notebooks.ingest import ingest_uploaded_files, ingest_url
 
 
 class NotebookHelper:
@@ -35,9 +37,27 @@ class NotebookHelper:
         return q, favorite_only, date_from.isoformat() if date_from else None, date_to.isoformat() if date_to else None
 
     @staticmethod
-    def render_notebook_card(nb: store.Notebook, col):
-        with col:
+    def render_notebook_card(nb: store.Notebook, container):
+        """Render notebook card with performance optimizations."""
+        with container:
+            # Use container to isolate each notebook card
             with st.container():
+                # Cache card content to avoid re-rendering
+                card_key = f"card_{nb.id}_{hash(nb.name + str(nb.updated_at) if hasattr(nb, 'updated_at') else nb.created_at)}"
+                
+                if card_key not in st.session_state:
+                    # Generate card content only once
+                    st.session_state[card_key] = {
+                        'name': nb.name,
+                        'created_date': nb.created_at.split('T')[0] if nb.created_at else 'Unknown',
+                        'sources_count': len(nb.sources) if nb.sources else 0,
+                        'tags_preview': ", ".join(nb.tags[:3]) if nb.tags else "No tags",
+                        'is_favorite': nb.is_favorite
+                    }
+                
+                card_data = st.session_state[card_key]
+                
+                # Render card header with gradient
                 palette = [
                     ("#667eea", "#764ba2"),
                     ("#f093fb", "#f5576c"),
@@ -51,36 +71,46 @@ class NotebookHelper:
                 c1, c2 = palette[h % len(palette)]
                 gradient = f"linear-gradient(135deg, {c1} 0%, {c2} 100%)"
 
-                st.markdown(NotebookUI.notebook_card_header_html(nb.name, gradient), unsafe_allow_html=True)
+                st.markdown(NotebookUI.notebook_card_header_html(card_data['name'], gradient), unsafe_allow_html=True)
 
+                # Render card body
                 with st.container():
                     tags_preview = (
-                        f'<div style="font-size: 14px; color: #999; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🏷️ {", ".join(nb.tags[:3])}</div>'
-                        if nb.tags else ''
+                        f'<div style="font-size: 14px; color: #999; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">🏷️ {card_data["tags_preview"]}</div>'
+                        if card_data['tags_preview'] != "No tags" else ''
                     )
                     st.markdown(
                         NotebookUI.notebook_card_body_html(
-                            created_date=nb.created_at.split('T')[0],
-                            sources_count=len(nb.sources),
+                            created_date=card_data['created_date'],
+                            sources_count=card_data['sources_count'],
                             tags_preview=tags_preview
                         ),
                         unsafe_allow_html=True
                     )
 
-                fav_label = "★" if nb.is_favorite else "☆"
+                # Action buttons
+                fav_label = "★" if card_data['is_favorite'] else "☆"
                 action_cols = st.columns(3)
+                
                 with action_cols[0]:
                     if st.button("📖", key=f"open_{nb.id}", help="Open notebook", use_container_width=True):
                         st.session_state["current_notebook_id"] = nb.id
                         st.query_params["view"] = "notebook"
                         st.rerun()
+                
                 with action_cols[1]:
                     if st.button(fav_label, key=f"fav_{nb.id}", help="Toggle favorite", use_container_width=True):
                         store.toggle_favorite(nb.id)
+                        # Update cache after favorite toggle
+                        if card_key in st.session_state:
+                            st.session_state[card_key]['is_favorite'] = not card_data['is_favorite']
+                        st.rerun()
+                
                 with action_cols[2]:
                     if st.button("🗑️", key=f"del_{nb.id}", help="Delete notebook", use_container_width=True):
                         st.session_state[f"confirm_del_{nb.id}"] = True
 
+                # Confirmation dialog
                 if st.session_state.get(f"confirm_del_{nb.id}"):
                     st.warning("Are you sure you want to delete this notebook?")
                     col_confirm1, col_confirm2 = st.columns(2)
@@ -88,6 +118,9 @@ class NotebookHelper:
                         if st.button("Yes, delete", key=f"confirm_btn_{nb.id}", type="primary"):
                             store.delete_notebook(nb.id)
                             st.session_state.pop(f"confirm_del_{nb.id}", None)
+                            # Clear card cache after deletion
+                            if card_key in st.session_state:
+                                del st.session_state[card_key]
                             st.rerun()
                     with col_confirm2:
                         if st.button("Cancel", key=f"cancel_btn_{nb.id}"):
@@ -165,5 +198,3 @@ class NotebookHelper:
         while len(questions) < 3:
             questions.append("Đưa ra phân tích chi tiết về một chủ đề cụ thể trong notebook.")
         return questions[:3]
-
-

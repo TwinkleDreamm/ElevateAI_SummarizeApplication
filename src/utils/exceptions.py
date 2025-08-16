@@ -71,3 +71,8 @@ class UnsupportedFormatError(ElevateAIException):
 class FileSizeError(ElevateAIException):
     """Exception raised when file size exceeds limits."""
     pass
+
+
+class TTSProcessingError(ElevateAIException):
+    """Exception raised when text-to-speech processing fails."""
+    pass

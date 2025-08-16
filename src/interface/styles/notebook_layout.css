@@ -141,6 +141,46 @@
     margin: 0.25rem;
 }
 
+/* Speak button specific styling */
+.speak-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.speak-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
+.speak-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+/* Audio player styling */
+.audio-player {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+/* Studio note action buttons container */
+.studio-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid #e9ecef;
+}
+
 /* Tab content headers */
 .tab-header {
     display: flex;
@@ -175,6 +215,82 @@
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
+/* Performance improvements */
+.notebook-card {
+    will-change: transform;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+.notebook-card:hover {
+    transform: translateY(-2px) translateZ(0);
+}
+
+/* Loading states */
+.loading-skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* Prevent blur during loading */
+.notebook-grid {
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.notebook-grid.loading {
+    opacity: 0.8;
+}
+
+/* Pagination styling */
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.pagination-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.pagination-button:hover:not(:disabled) {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+.pagination-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Cache status indicator */
+.cache-status {
+    background: #d4edda;
+    color: #155724;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    margin: 0.5rem 0;
+}
+
 /* Responsive design */
 @media (max-width: 1200px) {
     [data-testid="stTabs"] {
@@ -195,6 +311,16 @@
     
     .stTabs [data-baseweb="tab"] {
         padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .studio-actions {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .speak-btn {
+        padding: 0.4rem 0.8rem;
         font-size: 0.9rem;
     }
 }

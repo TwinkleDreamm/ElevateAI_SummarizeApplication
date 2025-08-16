@@ -7,7 +7,39 @@ from datetime import datetime
 from src.interface.notebooks import store
 from src.interface.app_context import get_context
 from src.interface.notebooks.ingest import ingest_uploaded_files, ingest_url
-from src.interface.pages.notebook_helper import NotebookHelper
+from src.interface.utils.notebook_helper import NotebookHelper
+import json
+import os
+from pathlib import Path
+
+
+def _get_notes_storage_path(notebook_id: str) -> Path:
+    """Get the storage path for notes of a specific notebook."""
+    data_dir = Path("data/notes")
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir / f"notebook_{notebook_id}_notes.json"
+
+
+def _save_notes_to_storage(notebook_id: str, notes: list):
+    """Save notes to persistent storage."""
+    try:
+        storage_path = _get_notes_storage_path(notebook_id)
+        with open(storage_path, 'w', encoding='utf-8') as f:
+            json.dump(notes, f, ensure_ascii=False, indent=2, default=str)
+    except Exception as e:
+        st.error(f"Failed to save notes to storage: {e}")
+
+
+def _load_notes_from_storage(notebook_id: str) -> list:
+    """Load notes from persistent storage."""
+    try:
+        storage_path = _get_notes_storage_path(notebook_id)
+        if storage_path.exists():
+            with open(storage_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        st.error(f"Failed to load notes from storage: {e}")
+    return []
 
 
 def _render_filters():
@@ -196,7 +228,7 @@ def _render_chat(nb: store.Notebook):
             st.info(f"📝 Chat history has {len(st.session_state.chat_history)} messages")
             
             # Chat history styling
-            from src.interface.pages.notebook_ui import NotebookUI
+            from src.interface.utils.notebook_ui import NotebookUI
             chat_style = NotebookUI.chat_style_css(max_height=500)
             st.markdown(chat_style, unsafe_allow_html=True)
             st.markdown('<div class="nb-chat-wrapper">', unsafe_allow_html=True)
@@ -205,8 +237,8 @@ def _render_chat(nb: store.Notebook):
                 st.markdown(f'<div class="nb-chat-item nb-chat-q"><div class="bubble q-bubble">{item["question"]}</div></div>', unsafe_allow_html=True)
                 st.markdown(f'<div class="nb-chat-item nb-chat-a"><div class="bubble a-bubble">{item["answer"]}</div></div>', unsafe_allow_html=True)
                 
-                # Action buttons for each message
-                bcols = st.columns([1,1,6])
+                # Action buttons for each message - now with 3 columns to accommodate Speak button
+                bcols = st.columns([1,1,1,3])
                 with bcols[0]:
                     # Stable key per chat message to avoid key drift across reruns
                     button_key = f"save_note_{item['id']}"
@@ -234,10 +266,50 @@ def _render_chat(nb: store.Notebook):
                             'added_to_source': False
                         }
                         st.session_state.studio_notes[nb.id].append(note)
+                        
+                        # Save to persistent storage
+                        _save_notes_to_storage(nb.id, st.session_state.studio_notes[nb.id])
+                        
                         st.success("✅ Note saved to Studio!")
                         st.rerun()  # Rerun to update button state
                 
                 with bcols[1]:
+                    # Speak button for text-to-speech
+                    if st.button("🔊 Speak", key=f"speak_chat_{item['id']}", 
+                               help="Listen to this answer", use_container_width=True):
+                        try:
+                            ctx = get_context()
+                            if ctx.get("tts_client"):
+                                with st.spinner("🎵 Generating audio..."):
+                                    # Get answer content for TTS
+                                    answer_text = item['answer']
+                                    
+                                    # Truncate text if too long (TTS has limits)
+                                    max_length = 4000
+                                    if len(answer_text) > max_length:
+                                        answer_text = answer_text[:max_length] + "..."
+                                        st.warning(f"⚠️ Answer was truncated for TTS (max {max_length} characters)")
+                                    
+                                    # Generate audio using TTS client
+                                    audio_data = ctx["tts_client"].text_to_speech(
+                                        text=answer_text,
+                                        voice="alloy",  # Fixed voice
+                                        model="tts-1",  # Fixed model - you can change this
+                                        instructions="Speak clearly and at a moderate pace, suitable for answer reading."
+                                    )
+                                    
+                                    if audio_data:
+                                        # Create audio player with autoplay
+                                        st.audio(audio_data, format="audio/mp3", start_time=0)
+                                        st.success("🎵 Audio generated.")
+                                    else:
+                                        st.error("❌ Failed to generate audio")
+                            else:
+                                st.error("❌ TTS service not available")
+                        except Exception as e:
+                            st.error(f"❌ Error generating speech: {str(e)}")
+                
+                with bcols[2]:
                     if include_sources_pref and item.get('sources'):
                         with st.popover("Sources"):
                             for s in item['sources'][:5]:
@@ -253,7 +325,7 @@ def _render_chat(nb: store.Notebook):
     if st.session_state.get('auto_scroll_to_question', False):
         st.session_state['auto_scroll_to_question'] = False
         # Add JavaScript for smooth scrolling
-        from src.interface.pages.notebook_ui import NotebookUI
+        from src.interface.utils.notebook_ui import NotebookUI
         st.markdown(NotebookUI.smooth_scroll_to_question_js(), unsafe_allow_html=True)
     
     st.markdown("### Ask a Question")
@@ -361,11 +433,20 @@ def _render_studio_panel(nb: store.Notebook):
         st.session_state.studio_notes = {}
     if nb.id not in st.session_state.studio_notes:
         st.session_state.studio_notes[nb.id] = []
+    
+    # Load notes from persistent storage if session state is empty
+    if not st.session_state.studio_notes[nb.id]:
+        stored_notes = _load_notes_from_storage(nb.id)
+        if stored_notes:
+            st.session_state.studio_notes[nb.id] = stored_notes
+            st.success(f"📚 Loaded {len(stored_notes)} notes from storage")
 
     # One-time migration from legacy saved_notes list (if present)
     if 'saved_notes' in st.session_state and st.session_state.saved_notes:
         st.session_state.studio_notes[nb.id].extend(st.session_state.saved_notes)
         st.session_state.saved_notes = []
+        # Save migrated notes to storage
+        _save_notes_to_storage(nb.id, st.session_state.studio_notes[nb.id])
 
     notes = st.session_state.studio_notes[nb.id]
     # Deduplicate notes by original_chat_id (fallback id)
@@ -378,6 +459,8 @@ def _render_studio_panel(nb: store.Notebook):
         if len(unique_notes_map) != len(notes):
             st.session_state.studio_notes[nb.id] = list(unique_notes_map.values())
             notes = st.session_state.studio_notes[nb.id]
+            # Save deduplicated notes to storage
+            _save_notes_to_storage(nb.id, notes)
     except Exception:
         pass
 
@@ -391,8 +474,9 @@ def _render_studio_panel(nb: store.Notebook):
             st.markdown(note['content'])
             st.caption(f"Sources: {', '.join(note['sources'][:2])}")
             
-            # Action buttons
-            col1, col2 = st.columns(2)
+            # Action buttons - now with 3 columns to accommodate Speak button
+            col1, col2, col3 = st.columns([2, 1, 1])
+            
             with col1:
                 add_label = "📚 Add to Source" if not note.get('added_to_source') else "✅ Added"
                 if st.button(add_label, key=f"add_to_source_{note['id']}_{i}", 
@@ -406,13 +490,70 @@ def _render_studio_panel(nb: store.Notebook):
                     )
                     # Mark note as added to sources but keep it in Studio
                     note['added_to_source'] = True
+                    # Save updated notes to storage
+                    _save_notes_to_storage(nb.id, st.session_state.studio_notes[nb.id])
                     st.success("✅ Note added to sources! (kept in Studio)")
                     st.rerun()
             
             with col2:
+                # Speak button for text-to-speech
+                if st.button("🔊 Speak", key=f"speak_note_{note['id']}_{i}", 
+                           help="Listen to this note", use_container_width=True):
+                    try:
+                        # Get context and TTS client with fallback
+                        ctx = get_context()
+                        tts_client = ctx.get("tts_client")
+                        
+                        # If TTS client is None, try to re-initialize it
+                        if tts_client is None:
+                            st.info("🔄 Re-initializing TTS client...")
+                            try:
+                                from src.ai.tts_client import TTSClient
+                                tts_client = TTSClient()
+                                # Update context
+                                ctx["tts_client"] = tts_client
+                                st.success("✅ TTS client re-initialized!")
+                            except Exception as init_error:
+                                st.error(f"❌ Failed to re-initialize TTS client: {init_error}")
+                                return
+                        
+                        if tts_client:
+                            with st.spinner("🎵 Generating audio..."):
+                                # Get note content for TTS
+                                note_text = note['content']
+                                    
+                                # Truncate text if too long (TTS has limits)
+                                max_length = 4000
+                                if len(note_text) > max_length:
+                                    note_text = note_text[:max_length] + "..."
+                                    st.warning(f"⚠️ Note was truncated for TTS (max {max_length} characters)")
+                                    
+                                # Generate audio using TTS client with fixed model
+                                audio_data = tts_client.text_to_speech(
+                                    text=note_text,
+                                    voice="alloy",  # Fixed voice
+                                    model="tts-1",  # Fixed model - you can change this
+                                    instructions="Speak clearly and at a moderate pace, suitable for note reading."
+                                )
+                                
+                                if audio_data:
+                                    # Create audio player with autoplay
+                                    st.audio(audio_data, format="audio/mp3", start_time=0)
+                                    st.success("🎵 Audio generated")
+                                else:
+                                    st.error("❌ Failed to generate audio")
+                        else:
+                            st.error("❌ TTS service not available after re-initialization")
+                    except Exception as e:
+                        st.error(f"❌ Error generating speech: {str(e)}")
+                        st.info("💡 This might be due to API rate limits or network issues")
+            
+            with col3:
                 if st.button("🗑️ Delete", key=f"delete_note_{note['id']}_{i}", 
                            help="Delete note"):
                     st.session_state.studio_notes[nb.id].pop(i)
+                    # Save updated notes to storage
+                    _save_notes_to_storage(nb.id, st.session_state.studio_notes[nb.id])
                     st.success("✅ Note deleted!")
                     st.rerun()
 
@@ -581,17 +722,65 @@ def main():
     st.markdown("---")
     st.subheader("Your Notebooks")
 
-    q, fav, dfrom, dto = _render_filters()
-    notebooks = store.list_notebooks(q, fav, dfrom, dto)
-    
-    if not notebooks:
-        st.info("No notebooks yet. Create your first notebook to get started!")
-        return
-    
-    cols = st.columns(4)
-    for i, nb in enumerate(notebooks):
-        col_index = i % 4
-        _render_notebook_card(nb, cols[col_index])
+    # Lazy load filters and notebooks
+    with st.spinner("Loading notebooks..."):
+        q, fav, dfrom, dto = _render_filters()
+        
+        # Cache notebooks in session state to avoid reloading
+        cache_key = f"notebooks_cache_{hash(f'{q}_{fav}_{dfrom}_{dto}')}"
+        if cache_key not in st.session_state:
+            st.session_state[cache_key] = store.list_notebooks(q, fav, dfrom, dto)
+        
+        notebooks = st.session_state[cache_key]
+        
+        if not notebooks:
+            st.info("No notebooks yet. Create your first notebook to get started!")
+            return
+        
+        # Lazy render notebooks with pagination
+        page_size = 8  # Show 8 notebooks per page
+        current_page = st.session_state.get('notebooks_page', 0)
+        total_pages = (len(notebooks) + page_size - 1) // page_size
+        
+        # Pagination controls
+        if total_pages > 1:
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col1:
+                if st.button("← Previous", disabled=current_page == 0):
+                    st.session_state['notebooks_page'] = max(0, current_page - 1)
+                    st.rerun()
+            with col2:
+                st.write(f"Page {current_page + 1} of {total_pages}")
+            with col3:
+                if st.button("Next →", disabled=current_page >= total_pages - 1):
+                    st.session_state['notebooks_page'] = min(total_pages - 1, current_page + 1)
+                    st.rerun()
+        
+        # Calculate start and end indices for current page
+        start_idx = current_page * page_size
+        end_idx = min(start_idx + page_size, len(notebooks))
+        current_notebooks = notebooks[start_idx:end_idx]
+        
+        # Render notebooks in grid with lazy loading
+        cols = st.columns(4)
+        for i, nb in enumerate(current_notebooks):
+            col_index = i % 4
+            with cols[col_index]:
+                # Use container to isolate each notebook card
+                with st.container():
+                    _render_notebook_card(nb, cols[col_index])
+        
+        # Show total count
+        st.caption(f"Showing {start_idx + 1}-{end_idx} of {len(notebooks)} notebooks")
+        
+        # Clear cache button for debugging
+        if st.button("🔄 Refresh Notebooks", help="Clear cache and reload notebooks"):
+            # Clear all notebook caches
+            for key in list(st.session_state.keys()):
+                if key.startswith('notebooks_cache_'):
+                    del st.session_state[key]
+            st.session_state['notebooks_page'] = 0
+            st.rerun()
 
 
 if __name__ == "__main__":

@@ -27,9 +27,9 @@ class NotebookUI:
         return """
         <script>
         setTimeout(function() {
-            const questionSection = document.querySelector('h3');
-            if (questionSection && questionSection.textContent.includes('Ask a Question')) {
-                questionSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const questionSection = document.querySelector("h3");
+            if (questionSection && questionSection.textContent.includes("Ask a Question")) {
+                questionSection.scrollIntoView({ behavior: "smooth", block: "center" });
             }
         }, 100);
         </script>
@@ -71,5 +71,3 @@ class NotebookUI:
             {tags_preview}
         </div>
         """
-
-

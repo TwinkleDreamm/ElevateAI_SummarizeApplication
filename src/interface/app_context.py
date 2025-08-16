@@ -25,6 +25,8 @@ def _build_context() -> Dict[str, Any]:
         DocumentProcessor,
         SpeechToTextProcessor,
     )
+    # Import YouTube processor separately to avoid dependency issues
+    from src.interface.notebooks.youtube_simple import SimpleYouTubeProcessor
     from src.analysis import TextAnalyzer, TextCleaner, TextChunker
     from src.database import VectorDatabase, EmbeddingGenerator
     from src.search import SemanticSearchEngine, RetrievalEngine, WebSearchEngine
@@ -37,6 +39,7 @@ def _build_context() -> Dict[str, Any]:
     context["video_processor"] = VideoProcessor()
     context["document_processor"] = DocumentProcessor()
     context["speech_processor"] = SpeechToTextProcessor()
+    context["youtube_processor"] = SimpleYouTubeProcessor()
 
     # Analysis
     context["text_analyzer"] = TextAnalyzer()
@@ -73,6 +76,19 @@ def _build_context() -> Dict[str, Any]:
         logger.warning(f"Multimodal AI initialization failed: {e}")
         context["multimodal_ai"] = None
 
+    # TTS component
+    try:
+        from src.ai.tts_client import TTSClient
+        logger.info("Initializing TTS client...")
+        tts_client = TTSClient()
+        logger.info(f"TTS client initialized successfully with voices: {tts_client.get_available_voices()}")
+        context["tts_client"] = tts_client
+    except Exception as e:  # pragma: no cover
+        logger.error(f"TTS client initialization failed in context: {e}")
+        import traceback
+        logger.error(f"TTS client error details: {traceback.format_exc()}")
+        context["tts_client"] = None
+
     return context
 
 
@@ -85,6 +101,18 @@ def get_context() -> Dict[str, Any]:
     if "_app_context" not in st.session_state:
         logger.info("Initializing shared app context")
         st.session_state._app_context = _build_context()
-    return st.session_state._app_context
+    
+    # Ensure TTS client is always available
+    context = st.session_state._app_context
+    if context.get("tts_client") is None:
+        logger.info("Re-initializing TTS client in existing context")
+        try:
+            from src.ai.tts_client import TTSClient
+            context["tts_client"] = TTSClient()
+            logger.info("TTS client re-initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to re-initialize TTS client: {e}")
+    
+    return context
 
 
