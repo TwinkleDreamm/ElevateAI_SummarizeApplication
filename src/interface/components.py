@@ -33,124 +33,114 @@ class UIComponents:
         st.markdown("---")
     
     @staticmethod
+    def get_current_settings() -> Dict[str, Any]:
+        """Lấy settings hiện tại từ session state hoặc file cấu hình."""
+        # Load from file first
+        try:
+            from pathlib import Path
+            import json
+            user_config_file = Path("config/user_settings.json")
+            if user_config_file.exists():
+                with open(user_config_file, 'r', encoding='utf-8') as f:
+                    file_settings = json.load(f)
+            else:
+                file_settings = {}
+        except Exception:
+            file_settings = {}
+        
+        # Load from session state
+        session_settings = st.session_state.get('app_settings', {})
+        
+        # Default settings
+        default_settings = {
+            'temperature': 0.7,
+            'max_tokens': 2000,
+            'top_p': 0.9,
+            'frequency_penalty': 0.0,
+            'presence_penalty': 0.0,
+            'model_name': 'gpt-4',
+            'similarity_threshold': 0.25,
+            'max_results': 10,
+            'chunk_size': 1000,
+            'chunk_overlap': 200,
+            'enable_web_search': False,
+            'enable_function_calling': False,
+            'enable_tts': True,
+            'tts_voice': 'alloy',
+            'audio_sample_rate': 16000,
+            'noise_reduction': 0.8,
+            'enable_vocal_separation': False,
+            'enable_memory': True,
+            'max_memory_context': 3,
+            'memory_consolidation_threshold': 10,
+            'store_conversations': True,
+            'memory_retention_days': 30,
+            'auto_cleanup': True,
+            'theme': 'light',
+            'language': 'vi',
+            'auto_save': True,
+            'show_processing_time': True,
+            'show_confidence_score': True,
+            'enable_animations': True,
+            'max_file_size_mb': 500,
+            'enable_debug_mode': False,
+            'cache_enabled': True,
+            'log_level': 'INFO',
+            'enable_metrics': True,
+            'backup_enabled': True
+        }
+        
+        # Merge settings (file settings > session settings > default settings)
+        merged_settings = {**default_settings, **session_settings, **file_settings}
+        return merged_settings
+
+    @staticmethod
     def render_sidebar():
         """Render sidebar with configuration options."""
+        # Get current settings
+        current_settings = UIComponents.get_current_settings()
+        
         with st.sidebar:
             st.header("⚙️ Configuration")
             
-            # Model settings
+            # Quick settings display
+            st.markdown("**Current Settings:**")
+            st.markdown(f"• Temperature: {current_settings.get('temperature', 0.7):.1f}")
+            st.markdown(f"• Max Tokens: {current_settings.get('max_tokens', 2000)}")
+            st.markdown(f"• Similarity: {current_settings.get('similarity_threshold', 0.25):.2f}")
+            
+            # Link to settings page
+            if st.button("⚙️ Open Settings", use_container_width=True):
+                st.query_params["page"] = "Settings"
+                st.rerun()
+            
+            st.markdown("---")
+            
+            # Model settings (read-only display)
             st.subheader("Model Settings")
+            st.markdown(f"**Temperature:** {current_settings.get('temperature', 0.7):.1f}")
+            st.markdown(f"**Max Tokens:** {current_settings.get('max_tokens', 2000)}")
+            st.markdown(f"**Model:** {current_settings.get('model_name', 'gpt-4')}")
             
-            use_azure = st.checkbox(
-                "Use Azure OpenAI",
-                value=True,
-                help="Use Azure OpenAI instead of OpenAI API"
-            )
-            
-            temperature = st.slider(
-                "Temperature",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.7,
-                step=0.1,
-                help="Controls randomness in responses"
-            )
-            
-            max_tokens = st.number_input(
-                "Max Tokens",
-                min_value=100,
-                max_value=4000,
-                value=2000,
-                step=100,
-                help="Maximum tokens in response"
-            )
-            
-            # Search settings
+            # Search settings (read-only display)
             st.subheader("Search Settings")
+            st.markdown(f"**Similarity Threshold:** {current_settings.get('similarity_threshold', 0.25):.2f}")
+            st.markdown(f"**Max Results:** {current_settings.get('max_results', 10)}")
+            st.markdown(f"**Web Search:** {'✅' if current_settings.get('enable_web_search', False) else '❌'}")
+            st.markdown(f"**Function Calling:** {'✅' if current_settings.get('enable_function_calling', False) else '❌'}")
             
-            similarity_threshold = st.slider(
-                "Similarity Threshold",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.7,
-                step=0.05,
-                help="Minimum similarity for search results"
-            )
-            
-            max_results = st.number_input(
-                "Max Results",
-                min_value=1,
-                max_value=20,
-                value=10,
-                step=1,
-                help="Maximum number of search results"
-            )
-            
-            enable_web_search = st.checkbox(
-                "Enable Web Search Fallback",
-                value=False,
-                help="Search web when local results are insufficient"
-            )
-            
-            # Multi-modal settings
+            # Multi-modal settings (read-only display)
             st.subheader("Multi-modal Features")
+            st.markdown(f"**TTS:** {'✅' if current_settings.get('enable_tts', True) else '❌'}")
+            st.markdown(f"**TTS Voice:** {current_settings.get('tts_voice', 'alloy')}")
             
-            enable_tts = st.checkbox(
-                "Enable Text-to-Speech",
-                value=True,
-                help="Generate audio summaries"
-            )
-            
-            tts_voice = st.selectbox(
-                "TTS Voice",
-                options=['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
-                index=0,
-                help="Voice for text-to-speech"
-            )
-            
-            enable_image_gen = st.checkbox(
-                "Enable Image Generation",
-                value=False,
-                help="Generate visual summaries"
-            )
-
-            # Memory settings
+            # Memory settings (read-only display)
             st.subheader("Memory Settings")
+            st.markdown(f"**Memory System:** {'✅' if current_settings.get('enable_memory', True) else '❌'}")
+            st.markdown(f"**Max Context:** {current_settings.get('max_memory_context', 3)}")
+            st.markdown(f"**Store Conversations:** {'✅' if current_settings.get('store_conversations', True) else '❌'}")
 
-            enable_memory = st.checkbox(
-                "Enable Memory System",
-                value=True,
-                help="Remember conversation context and facts"
-            )
-
-            max_memory_context = st.slider(
-                "Max Memory Context",
-                min_value=1,
-                max_value=10,
-                value=3,
-                help="Maximum memory entries to use for context"
-            )
-
-            store_conversations = st.checkbox(
-                "Store Conversations",
-                value=True,
-                help="Store conversation history in memory"
-            )
-
-            return {
-                'use_azure': use_azure,
-                'temperature': temperature,
-                'max_tokens': max_tokens,
-                'similarity_threshold': similarity_threshold,
-                'max_results': max_results,
-                'enable_web_search': enable_web_search,
-                'enable_tts': enable_tts,
-                'tts_voice': tts_voice,
-                'enable_image_gen': enable_image_gen,
-                'enable_memory': enable_memory,
-                'max_memory_context': max_memory_context,
-                'store_conversations': store_conversations
-            }
+            return current_settings
     
     @staticmethod
     def render_file_uploader():

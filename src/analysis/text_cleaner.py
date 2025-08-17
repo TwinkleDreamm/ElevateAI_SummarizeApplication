@@ -42,24 +42,7 @@ class TextCleaner:
     
     def _load_language_tools(self) -> None:
         """Load language processing tools."""
-        if LANGUAGE_TOOL_AVAILABLE:
-            try:
-                # Load grammar checkers for supported languages
-                for lang in ['vi', 'en']:
-                    try:
-                        if lang == 'vi':
-                            self.grammar_tools[lang] = language_tool_python.LanguageTool('vi')
-                        else:
-                            self.grammar_tools[lang] = language_tool_python.LanguageTool('en-US')
-                        self.logger.info(f"Grammar tool loaded for {lang}")
-                    except Exception as e:
-                        self.logger.warning(f"Failed to load grammar tool for {lang}: {e}")
-                        # Continue without grammar checking for this language
-                        pass
-            except Exception as e:
-                self.logger.warning(f"Language tools initialization failed: {e}")
-                # Continue without grammar checking
-                pass
+        self.logger.info("⚡ Grammar tools disabled for faster loading")
     
     def clean_text(self, text: str, **kwargs) -> str:
         """

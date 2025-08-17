@@ -10,11 +10,15 @@ class Settings:
     """Application settings with environment variable support."""
 
     def __init__(self):
+        # Load environment variables from .env file before reading them
+        self._load_env_file()
+
         # Application Settings
         self.app_name = os.getenv("APP_NAME", "ElevateAI")
         self.app_version = os.getenv("APP_VERSION", "1.0.0")
         self.debug = os.getenv("DEBUG", "False").lower() == "true"
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
+        self.use_openai = os.getenv("USE_OPENAI", "True").lower() == "true"
 
         # Azure OpenAI Configuration
         self.azure_openai_api_key = os.getenv("AZURE_OPENAI_API_KEY")
@@ -23,8 +27,11 @@ class Settings:
         self.azure_openai_deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4")
         self.azure_openai_embedding_deployment = os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-ada-002")
 
-        # OpenAI Configuration (fallback)
+        # OpenAI Configuration (and compatible providers)
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
+        self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL")
+        self.openai_chat_model = os.getenv("OPENAI_CHAT_MODEL")
 
         # Google Search API
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -41,7 +48,7 @@ class Settings:
 
         # Vector Database Settings
         self.vector_db_path = os.getenv("VECTOR_DB_PATH", "./data/vectordb")
-        self.embedding_model = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        # Local embedding model name (used only when not using OpenAI)
         self.chunk_size = int(os.getenv("CHUNK_SIZE", "1000"))
         self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "200"))
         self.max_chunks_per_query = int(os.getenv("MAX_CHUNKS_PER_QUERY", "10"))
@@ -59,9 +66,9 @@ class Settings:
         # Language Settings
         self.default_language = os.getenv("DEFAULT_LANGUAGE", "vi")
         self.supported_languages = ["vi", "en", "zh", "ja", "ko"]
-
-        # Load environment variables from .env file if available
-        self._load_env_file()
+        
+        # Performance Settings
+        self.disable_nltk_downloads = os.getenv("DISABLE_NLTK_DOWNLOADS", "True").lower() == "true"
 
     def _load_env_file(self):
         """Load environment variables from .env file."""

@@ -14,9 +14,15 @@ except ImportError:
     NLTK_AVAILABLE = False
 
 try:
-    import spacy
+    # import spacy
+    # from spacy.lang.vi import Vietnamese
+    # from spacy.lang.en import English
     SPACY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"Warning: spaCy not available: {e}")
+    SPACY_AVAILABLE = False
+except Exception as e:
+    print(f"Warning: spaCy import failed: {e}")
     SPACY_AVAILABLE = False
 
 from config.settings import settings
@@ -60,31 +66,22 @@ class TextChunker:
     
     def _load_nlp_models(self) -> None:
         """Load NLP models for sentence segmentation."""
-        if NLTK_AVAILABLE:
+        # Only download NLTK data if not disabled
+        if NLTK_AVAILABLE and not self.settings.disable_nltk_downloads:
             try:
                 nltk.download('punkt', quiet=True)
+                # Newer NLTK versions use 'punkt_tab' resources
+                try:
+                    nltk.download('punkt_tab', quiet=True)
+                except Exception:
+                    pass
+                self.logger.info("✅ NLTK punkt data downloaded successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to download NLTK punkt: {e}")
+        else:
+            self.logger.info("⚡ NLTK downloads disabled for faster loading")
         
-        if SPACY_AVAILABLE:
-            try:
-                # Try to load language models
-                for lang in ['vi', 'en']:
-                    try:
-                        if lang == 'vi':
-                            self.nlp_models[lang] = spacy.load('vi_core_news_sm')
-                        else:
-                            self.nlp_models[lang] = spacy.load('en_core_web_sm')
-                    except OSError:
-                        # Use blank model if specific model not available
-                        if lang == 'vi':
-                            from spacy.lang.vi import Vietnamese
-                            self.nlp_models[lang] = Vietnamese()
-                        else:
-                            from spacy.lang.en import English
-                            self.nlp_models[lang] = English()
-            except Exception as e:
-                self.logger.warning(f"Failed to load spaCy models: {e}")
+        self.logger.info("⚡ spaCy models disabled for faster loading")
     
     def split_into_chunks(self, text: str, chunk_size: Optional[int] = None, 
                          overlap: Optional[int] = None, **kwargs) -> List[TextChunk]:

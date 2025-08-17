@@ -7,7 +7,6 @@ from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 from dataclasses import dataclass
 
 try:
-    import openai
     from openai import AzureOpenAI, OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
@@ -24,6 +23,7 @@ from config.settings import settings
 from src.utils.logger import logger
 from src.utils.exceptions import LLMError
 from src.utils.memory import memory_manager
+from src.ai.function_calling import FunctionCaller
 
 
 @dataclass
@@ -54,8 +54,6 @@ class LLMClient:
         self.logger = logger
         
         # Model configuration
-        self.use_azure = self.config.get('use_azure', True)
-        self.model_name = self.config.get('model_name', settings.azure_openai_deployment_name)
         self.temperature = self.config.get('temperature', 0.7)
         self.max_tokens = self.config.get('max_tokens', 2000)
         
@@ -64,15 +62,21 @@ class LLMClient:
         self.openai_client = None
         self.langchain_client = None
         
+        # Initialize function caller
+        self.function_caller = FunctionCaller()
+        
         self._initialize_clients()
+        
+        # Fix: Log provider type after initialization
+        provider_info = self.get_model_info()
+        self.logger.info(f"LLM Client initialized - Provider: Model: {self.model_name}")
     
     def _initialize_clients(self) -> None:
         """Initialize OpenAI clients."""
         try:
             # Initialize Azure OpenAI client
-            if (self.use_azure and settings.azure_openai_api_key and 
-                settings.azure_openai_endpoint):
-                
+            if (settings.azure_openai_api_key and settings.azure_openai_endpoint and settings.azure_openai_deployment_name):
+                self.model_name = self.config.get('model_name', settings.azure_openai_deployment_name)
                 self.azure_client = AzureOpenAI(
                     api_key=settings.azure_openai_api_key,
                     api_version=settings.azure_openai_api_version,
@@ -93,9 +97,9 @@ class LLMClient:
             
             # Fallback to OpenAI client
             elif settings.openai_api_key:
-                self.openai_client = OpenAI(api_key=settings.openai_api_key)
+                self.openai_client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
                 self.logger.info("OpenAI client initialized")
-                
+                self.model_name = self.config.get('model_name', settings.openai_chat_model)
                 # Initialize Langchain OpenAI client if available
                 if LANGCHAIN_AVAILABLE:
                     self.langchain_client = ChatOpenAI(
@@ -202,6 +206,7 @@ class LLMClient:
             )
             
         except Exception as e:
+            self.logger.error(f"Azure OpenAI generation failed: {e}")
             raise LLMError(f"Azure OpenAI generation failed: {e}")
     
     def _generate_openai_response(self, messages: List[Dict[str, str]], **kwargs) -> LLMResponse:
@@ -235,6 +240,7 @@ class LLMClient:
             )
             
         except Exception as e:
+            self.logger.error(f"OpenAI generation failed: {e}")
             raise LLMError(f"OpenAI generation failed: {e}")
     
     def generate_streaming_response(self, messages: List[Dict[str, str]], **kwargs) -> AsyncGenerator[str, None]:
@@ -464,7 +470,6 @@ class LLMClient:
             Dictionary with model information
         """
         return {
-            'use_azure': self.use_azure,
             'model_name': self.model_name,
             'temperature': self.temperature,
             'max_tokens': self.max_tokens,
@@ -474,3 +479,81 @@ class LLMClient:
             'memory_enabled': True,
             'memory_stats': self.get_memory_stats()
         }
+    
+    # Function Calling Methods
+    def get_available_functions(self) -> List[str]:
+        """Get list of available function names."""
+        return self.function_caller.get_available_functions()
+    
+    def get_function_definitions(self) -> List[Dict[str, Any]]:
+        """Get function definitions in OpenAI format for LLM."""
+        return self.function_caller.get_function_definitions()
+    
+    def register_function(self, name: str, description: str, parameters: Dict[str, Any], 
+                         function: callable) -> None:
+        """Register a new function for calling."""
+        self.function_caller.register_function(name, description, parameters, function)
+    
+    def call_function(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a specific function by name with arguments."""
+        return self.function_caller.call_function(name, arguments)
+    
+    def process_function_calls(self, function_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Process function calls and return results."""
+        return self.function_caller.process_function_calls(function_calls)
+    
+    def generate_response_with_functions(self, messages: List[Dict[str, str]], 
+                                       use_functions: bool = True, **kwargs) -> LLMResponse:
+        """
+        Generate response with optional function calling support.
+        
+        Args:
+            messages: List of message dictionaries
+            use_functions: Whether to enable function calling
+            **kwargs: Additional parameters
+            
+        Returns:
+            LLMResponse with potential function calls
+        """
+        try:
+            self.logger.info(f"Generating response with functions: {use_functions}")
+            self.logger.info(f"Messages count: {len(messages)}")
+            
+            if use_functions:
+                # Add function definitions to the request
+                functions = self.get_function_definitions()
+                self.logger.info(f"Available functions: {len(functions)}")
+                
+                if functions:
+                    kwargs['functions'] = functions
+                    kwargs['function_call'] = 'auto'  # Let the model decide when to call functions
+                    self.logger.info("Function definitions added to request")
+                else:
+                    self.logger.warning("No function definitions available")
+            
+            # Generate response
+            self.logger.info("Calling generate_response...")
+            response = self.generate_response(messages, **kwargs)
+            self.logger.info(f"Response received: {response.content[:100]}...")
+            
+            # If response contains function calls, process them
+            if response.function_calls:
+                self.logger.info(f"Processing {len(response.function_calls)} function calls")
+                function_results = self.process_function_calls(response.function_calls)
+                
+                # Add function results to messages for follow-up
+                function_message = self.function_caller.create_function_call_message(function_results)
+                messages.append(function_message)
+                
+                # Generate final response with function results
+                self.logger.info("Generating final response with function results...")
+                final_response = self.generate_response(messages, **kwargs)
+                self.logger.info(f"Final response: {final_response.content[:100]}...")
+                return final_response
+            
+            self.logger.info("No function calls detected, returning original response")
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error in generate_response_with_functions: {e}")
+            raise

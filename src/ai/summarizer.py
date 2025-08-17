@@ -117,6 +117,10 @@ class Summarizer:
             instructions = f"Focus on information relevant to: {query}"
         else:
             instructions = "Provide a comprehensive summary of the main points."
+        # Allow callers to append extra guidance such as target language or length
+        extra_instructions = kwargs.get('extra_instructions') or kwargs.get('language_instruction')
+        if extra_instructions:
+            instructions += f"\n{extra_instructions}"
         
         # Add summary type specific instructions
         instructions += self._get_type_specific_instructions(summary_type)

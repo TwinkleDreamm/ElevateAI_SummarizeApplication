@@ -62,8 +62,16 @@ class VectorDatabase:
         """Initialize or load existing database."""
         try:
             if self._database_exists():
-                self.load_database()
+                self.logger.info("Loading existing database...")
+                try:
+                    self.load_database()
+                    self.logger.info("Database loaded successfully")
+                except Exception as load_error:
+                    self.logger.warning(f"Failed to load existing database: {load_error}")
+                    self.logger.info("Creating new database as fallback")
+                    self._create_new_database()
             else:
+                self.logger.info("No existing database found, creating new one")
                 self._create_new_database()
         except Exception as e:
             self.logger.error(f"Database initialization failed: {e}")
@@ -80,7 +88,16 @@ class VectorDatabase:
         self.logger.info("Creating new vector database")
         
         # Get embedding dimension from the generator
-        self.embedding_dim = self.embedding_generator.get_embedding_dimension()
+        # If no embedding model is available, default to 1536 (OpenAI ada dims)
+        try:
+            if hasattr(self.embedding_generator, "has_model") and self.embedding_generator.has_model():
+                self.embedding_dim = self.embedding_generator.get_embedding_dimension()
+            else:
+                # Default dimension matches OpenAI text-embedding-ada-002
+                self.embedding_dim = 1536
+        except Exception as e:
+            self.logger.warning(f"Could not infer embedding dimension; defaulting to 1536. Reason: {e}")
+            self.embedding_dim = 1536
         
         # Create FAISS index based on type
         if self.index_type == 'flat':
@@ -121,12 +138,42 @@ class VectorDatabase:
             raise VectorDatabaseError("Number of texts and metadata entries must match")
         
         try:
+            if hasattr(self.embedding_generator, "has_model") and not self.embedding_generator.has_model():
+                raise VectorDatabaseError("No embedding model available. Configure OpenAI API key to enable embeddings.")
             # Generate embeddings
             self.logger.info(f"Generating embeddings for {len(texts)} texts")
             embeddings = self.embedding_generator.generate_embeddings_batch(texts)
             
             # Convert to numpy array
             embeddings_array = np.array(embeddings).astype('float32')
+
+            # Check dimension mismatch between embeddings and index
+            if embeddings_array.ndim != 2 or embeddings_array.shape[1] <= 0:
+                raise VectorDatabaseError(f"Invalid embeddings shape: {embeddings_array.shape}")
+
+            new_dim = embeddings_array.shape[1]
+            if new_dim != self.embedding_dim:
+                # If index empty, recreate with correct dim; else abort with clear error
+                if self.index is None or getattr(self.index, 'ntotal', 0) == 0:
+                    self.logger.warning(
+                        f"Embedding dim {new_dim} != index dim {self.embedding_dim}. Recreating empty index with new dim.")
+                    # Recreate index with the new dimension
+                    self.embedding_dim = new_dim
+                    if self.index_type == 'flat':
+                        self.index = faiss.IndexFlatIP(self.embedding_dim)
+                    elif self.index_type == 'ivf':
+                        nlist = self.config.get('nlist', 100)
+                        quantizer = faiss.IndexFlatIP(self.embedding_dim)
+                        self.index = faiss.IndexIVFFlat(quantizer, self.embedding_dim, nlist)
+                        self.is_trained = False
+                    elif self.index_type == 'hnsw':
+                        m = self.config.get('hnsw_m', 16)
+                        self.index = faiss.IndexHNSWFlat(self.embedding_dim, m)
+                    else:
+                        raise VectorDatabaseError(f"Unsupported index type: {self.index_type}")
+                else:
+                    raise VectorDatabaseError(
+                        f"Embedding dimension ({new_dim}) does not match existing index dimension ({self.embedding_dim}).")
             
             # Train index if needed
             if not self.is_trained and self.index_type == 'ivf':
@@ -150,16 +197,26 @@ class VectorDatabase:
                     'id': ids[i],
                     'text': text,
                     'added_at': datetime.now().isoformat(),
-                    'embedding_model': self.embedding_generator.model_name
+                    'embedding_model': self.embedding_generator.get_model_info()['embedding_model']
                 }
                 self.metadata_manager.add_metadata(ids[i], enhanced_metadata)
             
             self.logger.info(f"Added {len(texts)} vectors to database")
+            
+            # Fix: Auto-save database after adding data
+            self.save_database()
+            self.logger.info("Database auto-saved after adding new vectors")
+            
             return ids
             
         except Exception as e:
-            self.logger.error(f"Failed to add vectors to database: {e}")
-            raise VectorDatabaseError(f"Failed to add vectors: {e}")
+            # Log rich error information
+            try:
+                err_type = type(e).__name__
+                self.logger.error(f"Failed to add vectors to database: {err_type}: {e}")
+            finally:
+                pass
+            raise VectorDatabaseError(f"Failed to add vectors: {type(e).__name__}: {e}")
     
     def search(self, query: str, k: int = 10, threshold: float = 0.0) -> List[Dict[str, Any]]:
         """
@@ -286,7 +343,7 @@ class VectorDatabase:
                 'is_trained': self.is_trained,
                 'total_vectors': self.index.ntotal,
                 'created_at': datetime.now().isoformat(),
-                'embedding_model': self.embedding_generator.model_name
+                'embedding_model': self.embedding_generator.get_model_info()['embedding_model']
             }
             
             with open(save_path / "db_info.json", 'w') as f:

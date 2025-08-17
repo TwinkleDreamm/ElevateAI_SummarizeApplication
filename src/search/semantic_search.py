@@ -25,12 +25,13 @@ class SearchResult:
 class SemanticSearchEngine:
     """Advanced semantic search engine with filtering and ranking."""
     
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, config: Optional[Dict[str, Any]] = None, vector_db: Optional[VectorDatabase] = None):
         """
         Initialize the semantic search engine.
         
         Args:
             config: Optional configuration dictionary
+            vector_db: Optional VectorDatabase instance to use
         """
         self.config = config or {}
         self.settings = settings
@@ -44,8 +45,18 @@ class SemanticSearchEngine:
         self.max_results = self.config.get('max_results', 50)
         self.rerank_top_k = self.config.get('rerank_top_k', settings.rerank_top_k)
         
-        # Initialize vector database
-        self.vector_db = VectorDatabase(config)
+        # Initialize vector database - Fix: Use provided instance or create new one
+        if vector_db:
+            self.vector_db = vector_db
+            self.logger.info("Using provided vector database instance")
+        else:
+            self.vector_db = VectorDatabase(config)
+            self.logger.info("Created new vector database instance")
+    
+    def set_vector_database(self, vector_db: VectorDatabase) -> None:
+        """Set the vector database instance to use."""
+        self.vector_db = vector_db
+        self.logger.info("Vector database instance updated")
     
     def search(self, query: str, **kwargs) -> List[SearchResult]:
         """
@@ -74,6 +85,13 @@ class SemanticSearchEngine:
             
             # Perform vector search
             raw_results = self.vector_db.search(query, k=k, threshold=threshold)
+
+            # Fallback: if no results above threshold, retry with threshold=0 to surface top-k
+            if not raw_results and threshold is not None and threshold > -1.0:
+                self.logger.info(
+                    f"No results above threshold {threshold}. Retrying with threshold=-1.0 to surface top-k candidates"
+                )
+                raw_results = self.vector_db.search(query, k=k, threshold=-1.0)
             
             # Apply metadata filters
             if filters:

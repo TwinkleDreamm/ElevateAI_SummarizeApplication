@@ -7,11 +7,15 @@ from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 
 try:
-    import spacy
-    from spacy.lang.vi import Vietnamese
-    from spacy.lang.en import English
+    # import spacy
+    # from spacy.lang.vi import Vietnamese
+    # from spacy.lang.en import English
     SPACY_AVAILABLE = True
-except ImportError:
+except ImportError as e:
+    print(f"Warning: spaCy not available: {e}")
+    SPACY_AVAILABLE = False
+except Exception as e:
+    print(f"Warning: spaCy import failed: {e}")
     SPACY_AVAILABLE = False
 
 try:
@@ -65,28 +69,23 @@ class TextAnalyzer:
     
     def _load_nlp_models(self) -> None:
         """Load NLP models for text analysis."""
-        if SPACY_AVAILABLE:
-            try:
-                # Try to load Vietnamese model
-                self.nlp_models['vi'] = spacy.load('vi_core_news_sm')
-            except OSError:
-                # Fallback to blank Vietnamese model
-                self.nlp_models['vi'] = Vietnamese()
-            
-            try:
-                # Try to load English model
-                self.nlp_models['en'] = spacy.load('en_core_web_sm')
-            except OSError:
-                # Fallback to blank English model
-                self.nlp_models['en'] = English()
-        
-        if NLTK_AVAILABLE:
+        # Only download NLTK data if not disabled
+        if NLTK_AVAILABLE and not self.settings.disable_nltk_downloads:
             try:
                 # Download required NLTK data
                 nltk.download('punkt', quiet=True)
+                try:
+                    nltk.download('punkt_tab', quiet=True)
+                except Exception:
+                    pass
                 nltk.download('stopwords', quiet=True)
+                self.logger.info("✅ NLTK data downloaded successfully")
             except Exception as e:
                 self.logger.warning(f"Failed to download NLTK data: {e}")
+        else:
+            self.logger.info("⚡ NLTK downloads disabled for faster loading")
+        
+        self.logger.info("⚡ NLP models disabled for faster loading")
     
     def analyze_transcript_content(self, transcript: str) -> str:
         """
