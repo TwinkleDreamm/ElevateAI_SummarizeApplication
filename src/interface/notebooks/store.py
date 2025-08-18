@@ -54,6 +54,8 @@ class Notebook:
     sources: List[SourceRef] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
     overview: str = ""
+    last_sources_count: int = 0  # Legacy field, kept for compatibility
+    last_sources_hash: str = ""  # Track sources content hash for accurate change detection
 
 
 def _load_all() -> List[Notebook]:
@@ -76,6 +78,8 @@ def _load_all() -> List[Notebook]:
                 sources=sources,
                 examples=item.get("examples", []),
                 overview=item.get("overview", ""),
+                last_sources_count=item.get("last_sources_count", 0),
+                last_sources_hash=item.get("last_sources_hash", ""),
             )
             notebooks.append(nb)
         return notebooks
@@ -241,6 +245,30 @@ def update_overview(notebook_id: str, overview: str) -> bool:
     for n in notebooks:
         if n.id == notebook_id:
             n.overview = overview
+            n.updated_at = _now_iso()
+            _save_all(notebooks)
+            return True
+    return False
+
+
+def update_notebook_sources_count(notebook_id: str, sources_count: int) -> bool:
+    """Update the last known sources count for a notebook to track changes. (Legacy)"""
+    notebooks = _load_all()
+    for n in notebooks:
+        if n.id == notebook_id:
+            n.last_sources_count = sources_count
+            n.updated_at = _now_iso()
+            _save_all(notebooks)
+            return True
+    return False
+
+
+def update_notebook_sources_hash(notebook_id: str, sources_hash: str) -> bool:
+    """Update the last known sources hash for a notebook to accurately track content changes."""
+    notebooks = _load_all()
+    for n in notebooks:
+        if n.id == notebook_id:
+            n.last_sources_hash = sources_hash
             n.updated_at = _now_iso()
             _save_all(notebooks)
             return True

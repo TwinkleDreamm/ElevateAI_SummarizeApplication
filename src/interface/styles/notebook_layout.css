@@ -6,6 +6,117 @@
     padding: 1rem;
 }
 
+/* Question input area styling */
+.question-input-container {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    border: 1px solid #e9ecef;
+}
+
+
+/* Input and button container alignment */
+.stColumns {
+    gap: 1rem;
+}
+
+.stColumns > div {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Textarea styling for better UX */
+textarea[aria-label="Your question"] {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+    padding: 12px;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+textarea[aria-label="Your question"]:focus {
+    border-color: #ff6b6b;
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+    outline: none;
+    background: #fefefe;
+}
+
+/* Helper text styling */
+.stCaption {
+    color: #6b7280;
+    font-size: 12px;
+    margin-bottom: 0.5rem;
+}
+
+/* Ask button styling - Red gradient */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 16px;
+    height: 48px;
+    color: white;
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    transition: all 0.3s ease;
+}
+
+.stButton > button[kind="primary"]:hover {
+    background: linear-gradient(135deg, #ff5252 0%, #e53e3e 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(255, 107, 107, 0.4);
+}
+
+.stButton > button[kind="primary"]:active {
+    transform: translateY(0px);
+    box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* Example questions styling */
+.example-questions {
+    background: #f8f9fa;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 1rem 0;
+    border-left: 4px solid #667eea;
+}
+
+.example-questions .stButton > button {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    margin: 0.25rem 0;
+    text-align: left;
+    transition: all 0.2s ease;
+}
+
+.example-questions .stButton > button:hover {
+    background: #f8f9fa;
+    border-color: #ff6b6b;
+    transform: translateX(4px);
+}
+
+/* Responsive design for mobile */
+@media (max-width: 768px) {
+    .stColumns {
+        flex-direction: column;
+    }
+
+    .stButton > button[kind="primary"] {
+        width: 100%;
+        margin-top: 1rem;
+    }
+
+    textarea[aria-label="Your question"] {
+        font-size: 16px; /* Prevent zoom on iOS */
+    }
+}
+
 /* Tab styling */
 [data-testid="stTabs"] {
     background: #f8f9fa;
@@ -232,4 +343,57 @@
 
 ::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
+}
+
+/* Compact checkbox styling for options row */
+.stCheckbox {
+    margin-bottom: 0.3rem !important;
+    margin-right: 0.5rem !important;
+}
+
+.stCheckbox > label {
+    font-size: 14px !important;
+    font-weight: 500 !important;
+}
+
+/* Reduce gap between checkbox columns */
+.stColumns {
+    gap: 0.5rem !important;
+}
+
+/* Make checkbox containers more compact */
+.stCheckbox > div {
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* Specific styling for options row */
+.stCheckbox div[data-testid="stCheckbox"] {
+    margin-bottom: 0 !important;
+}
+
+/* Processing message styling */
+.processing-message {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.processing-message .a-bubble {
+    background: #fff3cd !important;
+    border: 1px solid #ffeaa7 !important;
+    color: #856404 !important;
+}
+
+/* Error message styling */
+.error-message .a-bubble {
+    background: #f8d7da !important;
+    border: 1px solid #f5c6cb !important;
+    color: #721c24 !important;
+}
+
+/* No results message styling */
+.no-results-message .a-bubble {
+    background: #d1ecf1 !important;
+    border: 1px solid #bee5eb !important;
+    color: #0c5460 !important;
 }

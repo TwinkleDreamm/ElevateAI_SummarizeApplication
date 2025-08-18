@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+import hashlib
 from typing import List, Dict, Any
 from datetime import datetime
 
@@ -8,6 +9,24 @@ from src.interface.notebooks import store
 from src.interface.app_context import get_context
 from src.interface.notebooks.ingest import ingest_uploaded_files, ingest_url
 from src.interface.pages.notebook_helper import NotebookHelper
+
+
+def _calculate_sources_hash(sources: List[store.SourceRef]) -> str:
+    """Calculate hash of all sources to detect content changes."""
+    if not sources:
+        return ""
+
+    # Create a string representation of all sources
+    sources_data = []
+    for s in sources:
+        sources_data.append(f"{s.id}|{s.type}|{s.title}|{s.source_path_or_url}|{s.added_at}")
+
+    # Sort to ensure consistent hash regardless of order
+    sources_data.sort()
+    sources_string = "|".join(sources_data)
+
+    # Calculate hash
+    return hashlib.md5(sources_string.encode()).hexdigest()
 
 
 def _render_filters():
@@ -36,6 +55,8 @@ def _render_sources_panel(nb: store.Notebook):
             with col2:
                 if st.button("❌", key=f"del_source_{s.id}", help="Delete source"):
                     store.remove_source(nb.id, s.id)
+                    # Reset sources hash to trigger overview regeneration
+                    store.update_notebook_sources_hash(nb.id, "")
                     st.rerun()
 
     st.markdown("---")
@@ -56,38 +77,61 @@ def _render_sources_panel(nb: store.Notebook):
         if url:
             added += ingest_url(nb.id, url)
             store.add_source(nb.id, type=("youtube" if ("youtube.com" in url or "youtu.be" in url) else "url"), title=url, source_path_or_url=url)
+
+        if added > 0:
+            # Reset sources hash to trigger overview regeneration
+            store.update_notebook_sources_hash(nb.id, "")
+
         st.success(f"Added {added} chunks.")
 
 
-def _notebook_overview(nb: store.Notebook):
+def _notebook_overview(nb: store.Notebook) -> list:
     with st.expander("📘 Overview & Example questions", expanded=False):
         st.markdown("### Overview")
 
         # Check if we need to regenerate overview and examples
         current_sources_count = len(nb.sources)
-        cached_sources_count = st.session_state.get(f"sources_count_{nb.id}", 0)
+        current_sources_hash = _calculate_sources_hash(nb.sources)
         stored_overview = store.get_overview(nb.id)
         stored_examples = nb.examples
-        
-        # Only regenerate if sources count changed or no cached data exists
+
+        # Get last known sources hash from database (more accurate than count)
+        last_known_sources_hash = getattr(nb, 'last_sources_hash', "")
+
+        # Detect if sources content actually changed (not just count)
+        sources_changed = current_sources_hash != last_known_sources_hash
+
+        # Only regenerate if sources changed OR no stored data exists
         needs_regeneration = (
-            current_sources_count != cached_sources_count or 
-            not stored_overview or 
-            not stored_examples
+            sources_changed or
+            (not stored_overview and current_sources_count > 0) or
+            (not stored_examples and current_sources_count > 0)
         )
+
+        # Debug info (remove in production)
+        if st.session_state.get('debug_overview', False):
+            st.info(f"Debug: sources_changed={sources_changed}, needs_regeneration={needs_regeneration}, stored_examples={bool(stored_examples)}")
         
         if needs_regeneration:
             # Generate overview
-            if not stored_overview or current_sources_count != cached_sources_count:
+            if not stored_overview or sources_changed:
                 with st.spinner("Đang tạo overview..."):
                     ctx = get_context()
                     search = ctx["search_engine"]
+                    if not search:
+                        st.error("Search engine not available")
+                        return
                 try:
                     results = search.search("tóm tắt nội dung", k=5, threshold=0.0, filters={"notebook_id": nb.id})
                 except Exception:
                     results = []
 
                 overview = ""
+                if not ctx.get("summarizer"):
+                    st.warning("Summarizer not available - using fallback overview")
+                elif not results:
+                    st.info("No search results found for overview generation")
+
                 if ctx.get("summarizer") and results:
                     results_for_sum = [
                         {"text": r.text or r.metadata.get("text", ""), "score": r.score, "metadata": r.metadata}
@@ -126,43 +170,45 @@ def _notebook_overview(nb: store.Notebook):
                 
                 # Store the overview in database
                 store.update_overview(nb.id, overview)
+                # Update sources hash in notebook to track changes
+                store.update_notebook_sources_hash(nb.id, current_sources_hash)
             else:
                 overview = stored_overview
             
             # Generate examples
-            if not stored_examples or current_sources_count != cached_sources_count:
+            if not stored_examples or sources_changed:
                 with st.spinner("Đang tạo câu hỏi ví dụ..."):
                     examples = _generate_example_questions(nb)
-                    store.update_examples(nb.id, examples)
+                    if examples:
+                        store.update_examples(nb.id, examples)
+                        # Update sources hash in notebook to track changes
+                        store.update_notebook_sources_hash(nb.id, current_sources_hash)
+                    else:
+                        st.warning("Could not generate example questions")
             else:
                 examples = stored_examples
             
-            # Update cached sources count
-            st.session_state[f"sources_count_{nb.id}"] = current_sources_count
+            # Sources hash now tracked in database, no need for session state
         else:
             # Use cached data
             overview = stored_overview
             examples = stored_examples
         
         st.write(overview)
-        
-        # Show cache status
-        if not needs_regeneration:
-            st.caption("📝 Overview và Examples đã được lưu cache")
 
-        st.markdown("#### Example questions")
-        cols = st.columns(len(examples))
-        for i, ex in enumerate(examples[:3]):
-            with cols[i]:
-                if st.button(ex, key=f"ex_{i}"):
-                    st.session_state["nb_chat_input"] = ex
+        # Return examples for use in chat interface
+        return examples
+        
+
+
+
 
 
 def _generate_example_questions(nb: store.Notebook) -> List[str]:
     return NotebookHelper.generate_example_questions(nb)
 
 
-def _render_chat(nb: store.Notebook):
+def _render_chat(nb: store.Notebook, examples=None):
     """Render chat interface with conversation view and save note per answer."""
     ctx = get_context()
 
@@ -240,7 +286,9 @@ def _render_chat(nb: store.Notebook):
                 with bcols[1]:
                     if include_sources_pref and item.get('sources'):
                         with st.popover("Sources"):
-                            for s in item['sources'][:5]:
+                            # Remove duplicate sources
+                            unique_sources = list(set(item['sources'][:5]))
+                            for s in unique_sources:
                                 st.markdown(f"- {s}")
             
             st.markdown('</div>', unsafe_allow_html=True)
@@ -260,19 +308,98 @@ def _render_chat(nb: store.Notebook):
 
     # Input area with container for scroll target
     with st.container(key="ask_question"):
+        # Handle pending example question (must happen BEFORE widget is instantiated)
+        if st.session_state.get('pending_example_question'):
+            st.session_state['nb_chat_input'] = st.session_state['pending_example_question']
+            del st.session_state['pending_example_question']
+
         # Clear the input on rerun if flagged (must happen BEFORE widget is instantiated)
         if st.session_state.get('clear_nb_input', False):
             st.session_state['nb_chat_input'] = ""
             st.session_state['clear_nb_input'] = False
-        query = st.text_area("Your question", key="nb_chat_input", height=120, placeholder="Ask anything about the sources in this notebook…")
-    col1, col2 = st.columns([1,1])
+
+        # Question input with button on the right
+        input_col, button_col = st.columns([5, 1])
+        with input_col:
+            query = st.text_area("Your question", key="nb_chat_input", height=120, placeholder="Ask anything about the sources in this notebook…")
+        with button_col:
+            # Add spacing to align with text area center
+            st.markdown("<div style='height: 45px;'></div>", unsafe_allow_html=True)
+            ask_button = st.button("🚀 Ask", type="primary", use_container_width=True)
+
+        # Add JavaScript for Enter key support (Enter to submit, Shift+Enter for new line)
+        st.markdown("""
+        <script>
+        (function() {
+            // Function to setup keyboard handler
+            function setupKeyboardHandler() {
+                const textArea = document.querySelector('textarea[aria-label="Your question"]');
+                if (textArea && !textArea.hasAttribute('data-keyboard-setup')) {
+                    textArea.setAttribute('data-keyboard-setup', 'true');
+
+                    textArea.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+
+                            // Check if there's text to submit
+                            if (textArea.value.trim()) {
+                                // Find and click the Ask button
+                                const askButton = document.querySelector('button[kind="primary"]');
+                                if (askButton) {
+                                    askButton.click();
+                                }
+                            }
+                        }
+                        // Shift+Enter allows new line (default behavior)
+                    });
+
+                    console.log('Keyboard handler setup for question input');
+                }
+            }
+
+            // Setup initially and after DOM changes
+            function init() {
+                setupKeyboardHandler();
+
+                // Watch for DOM changes (Streamlit reruns)
+                if (window.keyboardObserver) {
+                    window.keyboardObserver.disconnect();
+                }
+
+                window.keyboardObserver = new MutationObserver(function(mutations) {
+                    setTimeout(setupKeyboardHandler, 100);
+                });
+
+                window.keyboardObserver.observe(document.body, {
+                    childList: true,
+                    subtree: true
+                });
+            }
+
+            // Initialize when DOM is ready
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
+        </script>
+        """, unsafe_allow_html=True)
+
+    # Options row - compact layout
+    col1, col2, _ = st.columns([2, 2, 4])
     with col1:
         use_cot = st.checkbox("Chain-of-thought", value=False)
     with col2:
         include_src = st.checkbox("Include sources", value=include_sources_pref)
         st.session_state['nb_include_sources'] = include_src
 
-        if st.button("Ask", type="primary"):
+    # Handle both button click and Enter key (through form submission)
+    submit_query = ask_button or st.session_state.get('submit_on_enter', False)
+    if st.session_state.get('submit_on_enter', False):
+        st.session_state['submit_on_enter'] = False
+
+    if submit_query:
             if not query.strip():
                 st.warning("Please enter a question")
                 return
@@ -318,23 +445,26 @@ def _render_chat(nb: store.Notebook):
                 messages.insert(0, {"role": "system", "content": role_instruction})
                 
                 if ctx.get("llm_client"):
-                    response = ctx["llm_client"].generate_response(messages, use_memory=True, store_in_memory=True, max_memory_context=3, context_sources=[r.metadata.get("source","unknown") for r in results])
+                    # Create unique sources list for context
+                    unique_context_sources = list(set([r.metadata.get("source","unknown") for r in results]))
+                    response = ctx["llm_client"].generate_response(messages, use_memory=True, store_in_memory=True, max_memory_context=3, context_sources=unique_context_sources)
                     answer = response.content
                 else:
                     answer = summary_result.summary
 
-                # Append new message to chat history
+                # Append new message to chat history with unique sources
+                unique_sources = list(set([r.metadata.get('source','unknown') for r in results[:5]]))
                 new_message = {
                     'id': f"chat_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}",
                     'question': query,
                     'answer': answer,
                     'timestamp': datetime.now().isoformat(),
-                    'sources': [r.metadata.get('source','unknown') for r in results[:5]]
+                    'sources': unique_sources
                 }
                 st.session_state.chat_history.append(new_message)
                 
                 # Show success message
-                st.success("✅ Answer generated! Scroll up to see the chat history.")
+                st.success("Answer generated! Scroll up to see the chat history.")
                 
                 # Reset searching flag to show chat history
                 st.session_state['is_searching'] = False
@@ -350,6 +480,19 @@ def _render_chat(nb: store.Notebook):
                 st.error(f"Error generating answer: {str(e)}")
                 # Reset searching flag to show chat history after error
                 st.session_state['is_searching'] = False
+
+    # Example questions section - moved below Ask a Question
+    if examples:
+        st.markdown("---")
+        st.markdown("#### 💡 Example questions")
+        st.caption("Click on any question to use it:")
+
+        # Display example questions in a more compact layout
+        for i, ex in enumerate(examples[:3]):
+            if st.button(f"📝 {ex}", key=f"ex_{i}", use_container_width=True):
+                # Set flag to populate input on next rerun
+                st.session_state["pending_example_question"] = ex
+                st.rerun()
 
 
 def _render_studio_panel(nb: store.Notebook):
@@ -389,7 +532,9 @@ def _render_studio_panel(nb: store.Notebook):
     for i, note in enumerate(notes):
         with st.expander(f"📝 Note {i+1} - {note['timestamp'][:16]}", expanded=False):
             st.markdown(note['content'])
-            st.caption(f"Sources: {', '.join(note['sources'][:2])}")
+            # Remove duplicate sources and show unique ones
+            unique_note_sources = list(set(note['sources'][:2]))
+            st.caption(f"Sources: {', '.join(unique_note_sources)}")
             
             # Action buttons
             col1, col2 = st.columns(2)
@@ -556,9 +701,12 @@ def main():
             _render_sources_panel(nb)
         
         with tab_notebook:
-            _notebook_overview(nb)
+            # Generate/get overview and examples
+            overview_examples = _notebook_overview(nb)
             st.divider()
-            _render_chat(nb)
+            # Use examples from overview generation (cached or newly generated)
+            examples = overview_examples if overview_examples else (nb.examples if hasattr(nb, 'examples') and nb.examples else [])
+            _render_chat(nb, examples)
         
         with tab_studio:
             _render_studio_panel(nb)

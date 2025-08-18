@@ -37,17 +37,24 @@ class Logger:
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
         
-        # Console handler
+        # Console handler with UTF-8 support
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
+        # Set encoding for Windows compatibility
+        if hasattr(console_handler.stream, 'reconfigure'):
+            try:
+                console_handler.stream.reconfigure(encoding='utf-8')
+            except Exception:
+                pass
         self._logger.addHandler(console_handler)
-        
-        # File handler
+
+        # File handler with UTF-8 encoding
         log_dir = settings.project_root / "logs"
         log_dir.mkdir(exist_ok=True)
-        
+
         file_handler = logging.FileHandler(
-            log_dir / f"{settings.app_name.lower()}.log"
+            log_dir / f"{settings.app_name.lower()}.log",
+            encoding='utf-8'
         )
         file_handler.setFormatter(formatter)
         self._logger.addHandler(file_handler)

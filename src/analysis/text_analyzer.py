@@ -84,7 +84,7 @@ class TextAnalyzer:
                 self.logger.warning(f"Failed to download NLTK data: {e}")
         else:
             self.logger.info("⚡ NLTK downloads disabled for faster loading")
-        
+
         self.logger.info("⚡ NLP models disabled for faster loading")
     
     def analyze_transcript_content(self, transcript: str) -> str:

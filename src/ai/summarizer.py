@@ -39,57 +39,74 @@ class Summarizer:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         """
         Initialize the summarizer.
-        
+
         Args:
             config: Optional configuration dictionary
         """
         self.config = config or {}
         self.settings = settings
         self.logger = logger
-        
+
         # Initialize components
         self.llm_client = LLMClient(config)
         self.prompt_engineer = PromptEngineer(config)
-        
+
         # Summarization parameters
         self.default_max_length = self.config.get('max_length', 500)
         self.default_min_length = self.config.get('min_length', 100)
         self.temperature = self.config.get('temperature', 0.3)  # Lower for more focused summaries
+
+        # Simple cache for recent summaries (optimization)
+        self._summary_cache = {}
+        self._cache_max_size = 50
     
-    def summarize_chunks(self, chunks: List[Dict[str, Any]], query: Optional[str] = None, 
+    def summarize_chunks(self, chunks: List[Dict[str, Any]], query: Optional[str] = None,
                         **kwargs) -> SummaryResult:
         """
         Summarize multiple chunks of content.
-        
+
         Args:
             chunks: List of content chunks
             query: Optional query for focused summarization
             **kwargs: Additional summarization options
-            
+
         Returns:
             SummaryResult object
-            
+
         Raises:
             LLMError: If summarization fails
         """
         if not chunks:
             raise LLMError("No chunks provided for summarization")
-        
+
+        # Optimization: Check cache first
+        cache_key = self._generate_cache_key(chunks, query, kwargs)
+        if cache_key in self._summary_cache:
+            self.logger.info("Using cached summary result")
+            return self._summary_cache[cache_key]
+
         try:
             self.logger.info(f"Summarizing {len(chunks)} chunks")
-            
-            # Determine summarization strategy
-            summary_type = kwargs.get('summary_type', SummaryType.ABSTRACTIVE)
             
             # Combine chunks into content
             combined_content = self._combine_chunks(chunks)
             
             # Check if content needs to be split for processing
-            if len(combined_content) > 8000:  # Rough token limit check
-                return self._summarize_long_content(chunks, query, **kwargs)
+            # Optimization: Increased threshold to avoid hierarchical for medium content
+            if len(combined_content) > 12000:  # Increased from 8000 to 12000 characters
+                result = self._summarize_long_content(chunks, query, **kwargs)
             else:
-                return self._summarize_single_pass(combined_content, chunks, query, **kwargs)
-                
+                result = self._summarize_single_pass(combined_content, chunks, query, **kwargs)
+
+            # Store result in cache
+            if len(self._summary_cache) >= self._cache_max_size:
+                # Simple LRU: remove oldest entry
+                oldest_key = next(iter(self._summary_cache))
+                del self._summary_cache[oldest_key]
+
+            self._summary_cache[cache_key] = result
+            return result
+
         except Exception as e:
             self.logger.error(f"Summarization failed: {e}")
             raise LLMError(f"Summarization failed: {e}")
@@ -156,57 +173,64 @@ class Summarizer:
             compression_ratio=compression_ratio
         )
     
-    def _summarize_long_content(self, chunks: List[Dict[str, Any]], 
+    def _summarize_long_content(self, chunks: List[Dict[str, Any]],
                                query: Optional[str] = None, **kwargs) -> SummaryResult:
-        """Summarize long content using hierarchical approach."""
-        self.logger.info("Using hierarchical summarization for long content")
-        
-        # Split chunks into groups
-        chunk_groups = self._group_chunks(chunks, max_group_size=5)
-        
-        # Summarize each group
+        """Summarize long content using optimized hierarchical approach."""
+        self.logger.info("Using optimized hierarchical summarization for long content")
+
+        # Optimization 1: Increase group size to reduce LLM calls
+        chunk_groups = self._group_chunks(chunks, max_group_size=8)  # Increased from 5 to 8
+
+        # Optimization 2: Skip intermediate summarization if only 1-2 groups
+        if len(chunk_groups) <= 2:
+            self.logger.info("Small number of groups, using single-pass summarization")
+            combined_content = self._combine_chunks(chunks)
+            return self._summarize_single_pass(combined_content, chunks, query, **kwargs)
+
+        # Optimization 3: Parallel processing preparation (sequential for now, but structured for future async)
         intermediate_summaries = []
-        for i, group in enumerate(chunk_groups):
+        for group in chunk_groups:
             group_content = self._combine_chunks(group)
-            
-            # Create focused prompt for intermediate summary
-            instructions = f"Summarize the key points from this section (Part {i+1})."
+
+            # Optimization 4: Shorter, more focused prompts
             if query:
-                instructions += f" Focus on information relevant to: {query}"
-            
+                instructions = f"Briefly summarize key points relevant to: {query}"
+            else:
+                instructions = "Briefly summarize the main points."
+
             messages = self.prompt_engineer.build_summarization_prompt(
                 content=group_content,
                 instructions=instructions
             )
-            
+
+            # Optimization 5: Reduced max_tokens for faster response
             response = self.llm_client.generate_response(
                 messages,
                 temperature=self.temperature,
-                max_tokens=300
+                max_tokens=200  # Reduced from 300 to 200
             )
-            
+
             intermediate_summaries.append(response.content)
         
-        # Combine intermediate summaries into final summary
-        combined_intermediate = "\n\n".join([
-            f"Section {i+1}: {summary}" 
-            for i, summary in enumerate(intermediate_summaries)
-        ])
-        
-        # Final summarization pass
-        final_instructions = "Synthesize the following section summaries into a comprehensive final summary."
+        # Optimization 6: Simpler combination without section numbering
+        combined_intermediate = "\n\n".join(intermediate_summaries)
+
+        # Optimization 7: Shorter final instructions
         if query:
-            final_instructions += f" Focus on information relevant to: {query}"
-        
+            final_instructions = f"Synthesize these summaries focusing on: {query}"
+        else:
+            final_instructions = "Synthesize these summaries into a coherent final summary."
+
         final_messages = self.prompt_engineer.build_summarization_prompt(
             content=combined_intermediate,
             instructions=final_instructions
         )
-        
+
+        # Optimization 8: Reduced max_tokens for final response
         final_response = self.llm_client.generate_response(
             final_messages,
             temperature=self.temperature,
-            max_tokens=kwargs.get('max_tokens', 800)
+            max_tokens=kwargs.get('max_tokens', 600)  # Reduced from 800 to 600
         )
         
         # Calculate metrics
@@ -293,7 +317,28 @@ class Summarizer:
             groups.append(current_group)
         
         return groups
-    
+
+    def _generate_cache_key(self, chunks: List[Dict[str, Any]], query: Optional[str], kwargs: Dict[str, Any]) -> str:
+        """Generate cache key for summarization request."""
+        import hashlib
+
+        # Create hash from chunks content and metadata
+        content_hash = hashlib.md5()
+        for chunk in chunks:
+            chunk_text = chunk.get('text', chunk.get('content', ''))
+            content_hash.update(chunk_text.encode('utf-8'))
+
+        # Include query and relevant kwargs
+        cache_data = {
+            'content_hash': content_hash.hexdigest(),
+            'query': query or '',
+            'summary_type': kwargs.get('summary_type', SummaryType.ABSTRACTIVE).value if hasattr(kwargs.get('summary_type', SummaryType.ABSTRACTIVE), 'value') else str(kwargs.get('summary_type', 'abstractive')),
+            'max_tokens': kwargs.get('max_tokens', 600)
+        }
+
+        cache_key = hashlib.md5(str(cache_data).encode('utf-8')).hexdigest()
+        return cache_key
+
     def _extract_source_info(self, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Extract source information from chunks."""
         sources = set()

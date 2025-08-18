@@ -80,8 +80,9 @@ class TextChunker:
                 self.logger.warning(f"Failed to download NLTK punkt: {e}")
         else:
             self.logger.info("⚡ NLTK downloads disabled for faster loading")
-        
-        self.logger.info("⚡ spaCy models disabled for faster loading")
+
+        # spaCy models are commented out in imports, so they're disabled
+        # self.logger.info("⚡ spaCy models disabled for faster loading")
     
     def split_into_chunks(self, text: str, chunk_size: Optional[int] = None, 
                          overlap: Optional[int] = None, **kwargs) -> List[TextChunk]:

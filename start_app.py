@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Simple startup script for ElevateAI that ensures conda Project_1 environment.
 """
@@ -7,6 +8,25 @@ import sys
 import os
 import subprocess
 from pathlib import Path
+
+# Set UTF-8 encoding for Windows console
+if sys.platform.startswith('win'):
+    import codecs
+    # Set environment variables for UTF-8
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    os.environ['PYTHONUTF8'] = '1'
+
+    # Try to reconfigure stdout/stderr for UTF-8
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except (AttributeError, OSError):
+        # Fallback for older Python versions
+        try:
+            sys.stdout = codecs.getwriter('utf-8')(sys.stdout.detach())
+            sys.stderr = codecs.getwriter('utf-8')(sys.stderr.detach())
+        except Exception:
+            pass
 
 
 def check_dependencies():

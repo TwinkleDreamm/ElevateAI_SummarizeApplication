@@ -1,0 +1,47 @@
+[
+  {
+    "id": "0fcc43cd-29fd-4eaf-8757-2e59dcaf8c99",
+    "name": "LongDP2",
+    "created_at": "2025-08-16T02:49:55.203381",
+    "updated_at": "2025-08-16T06:59:43.638492",
+    "is_favorite": false,
+    "description": "",
+    "tags": [
+      "Summarize"
+    ],
+    "sources": [
+      {
+        "id": "2d64028d-ff98-4e1e-b294-b18ede0988dd",
+        "type": "file",
+        "title": "AIO2025_35Days.pdf",
+        "source_path_or_url": "AIO2025_35Days.pdf",
+        "added_at": "2025-08-16T02:53:37.003839",
+        "meta": {}
+      },
+      {
+        "id": "914f7427-4041-420f-962b-7f3f9dd286d0",
+        "type": "file",
+        "title": "Sách Deep Learning cơ bản - v2.pdf",
+        "source_path_or_url": "Sách Deep Learning cơ bản - v2.pdf",
+        "added_at": "2025-08-16T04:15:23.846394",
+        "meta": {}
+      },
+      {
+        "id": "bf459476-2c49-4146-aea7-12d5d7a642bf",
+        "type": "file",
+        "title": "Sách Deep Learning cơ bản - v2.pdf",
+        "source_path_or_url": "Sách Deep Learning cơ bản - v2.pdf",
+        "added_at": "2025-08-16T04:19:35.298797",
+        "meta": {}
+      }
+    ],
+    "examples": [
+      "Nội dung chính của file AIO2025_35Days.pdf là gì và nó có thể áp dụng như thế nào trong việc học tập?",
+      "So sánh các phương pháp học sâu được trình bày trong \"Sách Deep Learning cơ bản - v2.pdf\" với nhau về hiệu quả và ứng dụng.",
+      "Những điểm nổi bật nào trong \"Sách Deep Learning cơ bản - v2.pdf\" có thể giúp người mới bắt đầu hiểu rõ hơn về lĩnh vực học sâu?"
+    ],
+    "overview": "**Tổng Quan về Sách Deep Learning Cơ Bản**\n\nSách \"Deep Learning cơ bản\" giới thiệu về trí tuệ nhân tạo (AI) và máy học (Machine Learning) như một phần quan trọng của cuộc cách mạng công nghiệp lần thứ tư. AI hiện diện trong nhiều lĩnh vực của đời sống, từ kinh tế, giáo dục, y tế cho đến giải trí và quân sự. Sự phát triển mạnh mẽ của AI chủ yếu đến từ những đột phá trong lĩnh vực Deep Learning, một nhánh con của máy học, cho phép giải quyết các vấn đề phức tạp và đa dạng. \n\nSách cũng đề cập đến các ứng dụng cụ thể của Deep Learning trong việc cải thiện hiệu suất công việc và tối ưu hóa quy trình. Các kỹ thuật như xử lý ảnh và phân loại dữ liệu được thảo luận, cùng với các ví dụ thực tiễn từ các bộ dữ liệu như Flickr8k. Tác giả nhấn mạnh tầm quan trọng của việc xử lý và chuẩn bị dữ liệu, cũng như các phương pháp học sâu để phát triển các mô hình AI hiệu quả.\n\n**Thông tin thêm**: Sách được cập nhật lần cuối vào tháng 8 năm 2020 và có sự thiết kế bìa độc đáo do Nguyễn Thanh Tú thực hiện.",
+    "last_sources_count": 0,
+    "last_sources_hash": "660d8cd43e29dbfc0b1b19aa5a582982"
+  }
+]
