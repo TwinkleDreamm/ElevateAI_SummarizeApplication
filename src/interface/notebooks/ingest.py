@@ -29,7 +29,7 @@ def _process_file_to_text(tmp_path: Path) -> Optional[str]:
         processed_audio = ctx["audio_processor"].process(tmp_path)
         transcript_result = ctx["speech_processor"].process(processed_audio)
         return transcript_result["text"]
-    elif file_extension in [".pdf", ".docx", ".txt"]:
+    elif file_extension in [".pdf", ".docx", ".txt", ".xlsx"]:
         return ctx["document_processor"].process(tmp_path)
     else:
         logger.warning(f"Unsupported file type: {file_extension}")

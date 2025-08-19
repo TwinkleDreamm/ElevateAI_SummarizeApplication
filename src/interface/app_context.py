@@ -31,6 +31,21 @@ def _build_context() -> Dict[str, Any]:
     from src.database import VectorDatabase, EmbeddingGenerator
     from src.search import SemanticSearchEngine, RetrievalEngine, WebSearchEngine
     from src.ai import LLMClient, PromptEngineer, Summarizer, MultiModalAI
+    # Optional: LangChain/LangGraph (guarded via feature flags)
+    from src.utils.feature_flags import feature_flags
+    try:
+        from src.ai.langchain import (
+            LangchainPromptManager,
+            LangchainLLMClient,
+            LangchainMemoryManager,
+        )
+    except Exception:  # pragma: no cover
+        LangchainPromptManager = None  # type: ignore
+        LangchainLLMClient = None  # type: ignore
+        LangchainMemoryManager = None  # type: ignore
+    # LangGraph is disabled (we're using LangChain only)
+    create_qa_workflow = None  # type: ignore
+    create_summarization_workflow = None  # type: ignore
 
     context: Dict[str, Any] = {}
 
@@ -55,20 +70,41 @@ def _build_context() -> Dict[str, Any]:
     context["retrieval_engine"] = RetrievalEngine(search_engine=search_engine)
     context["web_search"] = WebSearchEngine()
 
-    # AI components
+    # Legacy AI components (kept for compatibility but not primary)
     try:
-        context["llm_client"] = LLMClient()
+        context["legacy_llm_client"] = LLMClient()
     except Exception as e:  # pragma: no cover
-        logger.warning(f"LLM client initialization failed in context: {e}")
-        context["llm_client"] = None
+        logger.warning(f"Legacy LLM client initialization failed in context: {e}")
+        context["legacy_llm_client"] = None
 
     try:
-        context["prompt_engineer"] = PromptEngineer()
-        context["summarizer"] = Summarizer()
+        context["legacy_prompt_engineer"] = PromptEngineer()
+        context["legacy_summarizer"] = Summarizer()
     except Exception as e:  # pragma: no cover
-        logger.warning(f"Text processing components failed: {e}")
-        context["prompt_engineer"] = None
-        context["summarizer"] = None
+        logger.warning(f"Legacy text processing components failed: {e}")
+        context["legacy_prompt_engineer"] = None
+        context["legacy_summarizer"] = None
+
+    # LangChain components (primary AI system)
+    try:
+        context["prompt_manager"] = LangchainPromptManager()
+        context["llm_client"] = LangchainLLMClient()
+        if feature_flags.is_enabled("enable_memory"):
+            # Pass underlying LC LLM into memory manager for ConversationSummaryMemory
+            lc_llm = getattr(context["llm_client"], "llm", None)
+            context["memory_manager"] = LangchainMemoryManager(llm=lc_llm)
+        # Add output parser for structured responses
+        try:
+            from src.ai.langchain import LangchainOutputParser
+            context["output_parser"] = LangchainOutputParser()
+        except Exception:
+            context["output_parser"] = None
+    except Exception as e:  # pragma: no cover
+        logger.warning(f"LangChain components failed: {e}")
+
+    # LangGraph workflows disabled
+    context["qa_workflow"] = None
+    context["summarization_workflow"] = None
 
     try:
         context["multimodal_ai"] = MultiModalAI()

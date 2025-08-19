@@ -59,7 +59,7 @@ def render_model_settings():
             "Temperature",
             min_value=0.0,
             max_value=2.0,
-            value=st.session_state.get('temperature', 0.7),
+            value=st.session_state.get('openai_temperature', settings.openai_temperature),
             step=0.1,
             help="Điều khiển độ ngẫu nhiên trong câu trả lời. Giá trị cao hơn = sáng tạo hơn"
         )
@@ -68,7 +68,7 @@ def render_model_settings():
             "Max Tokens",
             min_value=100,
             max_value=8000,
-            value=st.session_state.get('max_tokens', 2000),
+            value=st.session_state.get('openai_max_tokens', settings.openai_max_tokens),
             step=100,
             help="Số lượng token tối đa trong câu trả lời"
         )
@@ -77,8 +77,8 @@ def render_model_settings():
             "Top P",
             min_value=0.0,
             max_value=1.0,
-            value=st.session_state.get('top_p', 0.9),
-            step=0.05,
+            value=st.session_state.get('openai_top_p', settings.openai_top_p),
+            step=0.1,
             help="Điều khiển đa dạng của câu trả lời"
         )
     
@@ -87,7 +87,7 @@ def render_model_settings():
             "Frequency Penalty",
             min_value=-2.0,
             max_value=2.0,
-            value=st.session_state.get('frequency_penalty', 0.0),
+            value=st.session_state.get('openai_frequency_penalty', settings.openai_frequency_penalty),
             step=0.1,
             help="Giảm lặp lại từ ngữ"
         )
@@ -96,7 +96,7 @@ def render_model_settings():
             "Presence Penalty",
             min_value=-2.0,
             max_value=2.0,
-            value=st.session_state.get('presence_penalty', 0.0),
+            value=st.session_state.get('openai_presence_penalty', settings.openai_presence_penalty),
             step=0.1,
             help="Khuyến khích thảo luận về chủ đề mới"
         )
@@ -109,12 +109,12 @@ def render_model_settings():
         )
     
     return {
-        'temperature': temperature,
-        'max_tokens': max_tokens,
-        'top_p': top_p,
-        'frequency_penalty': frequency_penalty,
-        'presence_penalty': presence_penalty,
-        'model_name': model_name
+        'openai_temperature': temperature,
+        'openai_max_tokens': max_tokens,
+        'openai_top_p': top_p,
+        'openai_frequency_penalty': frequency_penalty,
+        'openai_presence_penalty': presence_penalty,
+        'openai_chat_model': model_name
     }
 
 
@@ -129,7 +129,7 @@ def render_search_settings():
             "Similarity Threshold",
             min_value=0.0,
             max_value=1.0,
-            value=st.session_state.get('similarity_threshold', 0.25),
+            value=st.session_state.get('similarity_threshold', settings.similarity_threshold),
             step=0.05,
             help="Ngưỡng tương đồng tối thiểu cho kết quả tìm kiếm"
         )
@@ -138,7 +138,7 @@ def render_search_settings():
             "Max Results",
             min_value=1,
             max_value=50,
-            value=st.session_state.get('max_results', 10),
+            value=st.session_state.get('max_results', settings.max_results),
             step=1,
             help="Số lượng kết quả tìm kiếm tối đa"
         )
@@ -147,7 +147,7 @@ def render_search_settings():
             "Chunk Size",
             min_value=100,
             max_value=2000,
-            value=st.session_state.get('chunk_size', 1000),
+            value=st.session_state.get('chunk_size', settings.chunk_size),
             step=100,
             help="Kích thước chunk khi xử lý tài liệu"
         )
@@ -157,20 +157,20 @@ def render_search_settings():
             "Chunk Overlap",
             min_value=0,
             max_value=500,
-            value=st.session_state.get('chunk_overlap', 200),
+            value=st.session_state.get('chunk_overlap', settings.chunk_overlap),
             step=50,
             help="Độ chồng lấp giữa các chunk"
         )
         
         enable_web_search = st.checkbox(
             "Enable Web Search",
-            value=st.session_state.get('enable_web_search', False),
+            value=st.session_state.get('enable_web_search', settings.enable_web_search),
             help="Tìm kiếm web khi kết quả local không đủ"
         )
         
         enable_function_calling = st.checkbox(
             "Enable Function Calling",
-            value=st.session_state.get('enable_function_calling', False),
+            value=st.session_state.get('enable_function_calling', settings.enable_function_calling),
             help="Sử dụng function calling để phân tích nâng cao"
         )
     
@@ -193,21 +193,21 @@ def render_audio_settings():
     with col1:
         enable_tts = st.checkbox(
             "Enable Text-to-Speech",
-            value=st.session_state.get('enable_tts', True),
+            value=st.session_state.get('enable_tts', settings.enable_tts),
             help="Tạo âm thanh cho tóm tắt"
         )
         
         tts_voice = st.selectbox(
             "TTS Voice",
             options=['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
-            index=0,
+            index=['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'].index(settings.tts_voice) if settings.tts_voice in ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'] else 0,
             help="Giọng nói cho text-to-speech"
         )
         
         audio_sample_rate = st.selectbox(
             "Audio Sample Rate",
             options=[8000, 16000, 22050, 44100],
-            index=1,
+            index=[8000, 16000, 22050, 44100].index(settings.audio_sample_rate) if settings.audio_sample_rate in [8000, 16000, 22050, 44100] else 1,
             help="Tần số lấy mẫu âm thanh"
         )
     
@@ -216,14 +216,14 @@ def render_audio_settings():
             "Noise Reduction",
             min_value=0.0,
             max_value=1.0,
-            value=st.session_state.get('noise_reduction', 0.8),
+            value=st.session_state.get('noise_reduction', settings.noise_reduction_strength),
             step=0.1,
             help="Độ mạnh giảm tiếng ồn"
         )
         
         enable_vocal_separation = st.checkbox(
             "Enable Vocal Separation",
-            value=st.session_state.get('enable_vocal_separation', False),
+            value=st.session_state.get('enable_vocal_separation', settings.enable_vocal_separation),
             help="Tách giọng nói khỏi nhạc nền"
         )
     
@@ -306,39 +306,39 @@ def render_interface_settings():
         theme = st.selectbox(
             "Theme",
             options=["light", "dark"],
-            index=0,
+            index=["light", "dark"].index(settings.theme) if settings.theme in ["light", "dark"] else 0,
             help="Chọn giao diện sáng hoặc tối"
         )
         
         language = st.selectbox(
             "Language",
             options=["vi", "en", "zh", "ja", "ko"],
-            index=0,
+            index=["vi", "en", "zh", "ja", "ko"].index(settings.default_language) if settings.default_language in ["vi", "en", "zh", "ja", "ko"] else 0,
             help="Ngôn ngữ giao diện"
         )
         
         auto_save = st.checkbox(
             "Auto Save Settings",
-            value=st.session_state.get('auto_save', True),
+            value=st.session_state.get('auto_save', settings.auto_save),
             help="Tự động lưu cài đặt"
         )
     
     with col2:
         show_processing_time = st.checkbox(
             "Show Processing Time",
-            value=st.session_state.get('show_processing_time', True),
+            value=st.session_state.get('show_processing_time', settings.show_processing_time),
             help="Hiển thị thời gian xử lý"
         )
         
         show_confidence_score = st.checkbox(
             "Show Confidence Score",
-            value=st.session_state.get('show_confidence_score', True),
+            value=st.session_state.get('show_confidence_score', settings.show_confidence_score),
             help="Hiển thị điểm tin cậy"
         )
         
         enable_animations = st.checkbox(
             "Enable Animations",
-            value=st.session_state.get('enable_animations', True),
+            value=st.session_state.get('enable_animations', settings.enable_animations),
             help="Bật hiệu ứng animation"
         )
     
@@ -363,20 +363,20 @@ def render_advanced_settings():
             "Max File Size (MB)",
             min_value=10,
             max_value=1000,
-            value=st.session_state.get('max_file_size_mb', 500),
+            value=st.session_state.get('max_file_size_mb', settings.max_file_size_mb),
             step=10,
             help="Kích thước file tối đa được phép upload"
         )
         
         enable_debug_mode = st.checkbox(
             "Enable Debug Mode",
-            value=st.session_state.get('enable_debug_mode', False),
+            value=st.session_state.get('enable_debug_mode', settings.debug),
             help="Bật chế độ debug để xem thông tin chi tiết"
         )
         
         cache_enabled = st.checkbox(
             "Enable Caching",
-            value=st.session_state.get('cache_enabled', True),
+            value=st.session_state.get('cache_enabled', settings.cache_enabled),
             help="Bật cache để tăng tốc độ"
         )
     
@@ -384,19 +384,19 @@ def render_advanced_settings():
         log_level = st.selectbox(
             "Log Level",
             options=["DEBUG", "INFO", "WARNING", "ERROR"],
-            index=1,
+            index=["DEBUG", "INFO", "WARNING", "ERROR"].index(settings.log_level) if settings.log_level in ["DEBUG", "INFO", "WARNING", "ERROR"] else 1,
             help="Mức độ log"
         )
         
         enable_metrics = st.checkbox(
             "Enable Metrics Collection",
-            value=st.session_state.get('enable_metrics', True),
+            value=st.session_state.get('enable_metrics', settings.enable_metrics),
             help="Thu thập metrics để cải thiện hiệu suất"
         )
         
         backup_enabled = st.checkbox(
             "Enable Auto Backup",
-            value=st.session_state.get('backup_enabled', True),
+            value=st.session_state.get('backup_enabled', settings.backup_enabled),
             help="Tự động sao lưu dữ liệu"
         )
     
@@ -518,6 +518,94 @@ def main():
         if st.button("📊 Settings Summary", use_container_width=True):
             summary = settings_manager.get_settings_summary()
             st.json(summary)
+    
+    # Test AI Settings Update
+    st.markdown("---")
+    st.subheader("🧪 Test AI Settings Update")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔍 Check AI Settings Status", use_container_width=True):
+            try:
+                context = get_context()
+                if context.get("llm_client"):
+                    settings_check = context["llm_client"].check_settings_applied()
+                    
+                    if settings_check["settings_applied"]:
+                        st.success("✅ All AI settings are properly applied!")
+                    else:
+                        st.warning("⚠️ Some AI settings are not applied:")
+                        for key, mismatch in settings_check["mismatches"].items():
+                            st.write(f"• {key}: current={mismatch['current']}, expected={mismatch['expected']}")
+                    
+                    # Show detailed info
+                    with st.expander("📋 Detailed Settings Info"):
+                        st.json(settings_check)
+                else:
+                    st.error("❌ LangchainLLMClient not available")
+            except Exception as e:
+                st.error(f"❌ Error checking AI settings: {e}")
+    
+    with col2:
+        if st.button("🔄 Test Settings Update", use_container_width=True):
+            try:
+                context = get_context()
+                if context.get("llm_client"):
+                    # Test update with a different temperature
+                    test_temp = 0.9
+                    context["llm_client"].update_config({"temperature": test_temp})
+                    
+                    # Check if update was applied
+                    settings_check = context["llm_client"].check_settings_applied()
+                    current_temp = context["llm_client"].config.get("temperature")
+                    
+                    if current_temp == test_temp:
+                        st.success(f"✅ Temperature updated successfully to {test_temp}")
+                    else:
+                        st.error(f"❌ Temperature update failed. Current: {current_temp}, Expected: {test_temp}")
+                    
+                    # Show updated config
+                    with st.expander("📋 Updated Configuration"):
+                        st.json(context["llm_client"].config)
+                else:
+                    st.error("❌ LangchainLLMClient not available")
+            except Exception as e:
+                st.error(f"❌ Error testing settings update: {e}")
+    
+    # Debug Configuration
+    st.markdown("---")
+    st.subheader("🐛 Debug Configuration")
+    
+    if st.button("🔍 Debug LangchainLLMClient Config", use_container_width=True):
+        try:
+            context = get_context()
+            if context.get("llm_client"):
+                debug_info = context["llm_client"].debug_config()
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown("**Self Config:**")
+                    st.json(debug_info['self_config'])
+                    
+                    st.markdown("**Settings Values:**")
+                    st.json(debug_info['settings_values'])
+                
+                with col2:
+                    st.markdown("**Default Config:**")
+                    st.json(debug_info['default_config'])
+                    
+                    st.markdown("**LLM Config:**")
+                    st.json(debug_info['llm_config'])
+                
+                # Show settings source
+                st.markdown(f"**Settings Source:** {debug_info.get('settings_source', 'Unknown')}")
+                
+            else:
+                st.error("❌ LangchainLLMClient not available")
+        except Exception as e:
+            st.error(f"❌ Error debugging config: {e}")
     
     # Settings preview and information
     col1, col2 = st.columns([2, 1])

@@ -150,7 +150,7 @@ class UIComponents:
         # File uploader
         uploaded_files = st.file_uploader(
             "Choose files to process",
-            type=['mp4', 'avi', 'mov', 'mp3', 'wav', 'pdf', 'docx', 'txt'],
+            type=['mp4', 'avi', 'mov', 'mp3', 'wav', 'pdf', 'docx', 'txt', 'xlsx'],
             accept_multiple_files=True,
             help="Upload video, audio, or document files"
         )

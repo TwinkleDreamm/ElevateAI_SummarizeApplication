@@ -129,6 +129,12 @@ class NotebookHelper:
 
     @staticmethod
     def generate_example_questions(nb: store.Notebook) -> List[str]:
+        return [
+                "Tóm tắt 5 ý chính của tài liệu này, kèm trích dẫn nguồn.",
+                "Liệt kê mốc thời gian quan trọng và nguồn trích dẫn.",
+                "So sánh hai quan điểm chính trong các nguồn, kèm trích dẫn."
+        ]
+
         if not nb.sources:
             return [
                 "Tóm tắt 5 ý chính của tài liệu này, kèm trích dẫn nguồn.",

@@ -164,6 +164,40 @@ class SettingsManager:
         log_level = current_settings.get('log_level', 'INFO')
         # Set logging level
         
+        # Apply AI model settings to LangchainLLMClient if available
+        try:
+            import streamlit as st
+            if "_app_context" in st.session_state:
+                context = st.session_state._app_context
+                
+                # Update LangchainLLMClient with new settings
+                if context.get("llm_client") and hasattr(context["llm_client"], "update_config"):
+                    ai_settings = {}
+                    
+                    # OpenAI model parameters
+                    if 'openai_temperature' in current_settings:
+                        ai_settings['temperature'] = current_settings['openai_temperature']
+                    if 'openai_max_tokens' in current_settings:
+                        ai_settings['max_tokens'] = current_settings['openai_max_tokens']
+                    if 'openai_top_p' in current_settings:
+                        ai_settings['top_p'] = current_settings['openai_top_p']
+                    if 'openai_frequency_penalty' in current_settings:
+                        ai_settings['frequency_penalty'] = current_settings['openai_frequency_penalty']
+                    if 'openai_presence_penalty' in current_settings:
+                        ai_settings['presence_penalty'] = current_settings['openai_presence_penalty']
+                    if 'openai_chat_model' in current_settings:
+                        ai_settings['model_name'] = current_settings['openai_chat_model']
+                    
+                    if ai_settings:
+                        context["llm_client"].update_config(ai_settings)
+                        print(f"✅ Updated LangchainLLMClient with new settings: {ai_settings}")
+                
+                # Update other components if needed
+                # TODO: Add more component updates here
+                
+        except Exception as e:
+            print(f"Warning: Failed to apply AI settings: {e}")
+        
         return current_settings
     
     def validate_settings(self, settings_dict: Dict[str, Any]) -> Dict[str, str]:
