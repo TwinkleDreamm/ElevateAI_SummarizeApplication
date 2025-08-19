@@ -145,8 +145,10 @@ class Summarizer:
         compression_ratio = summary_word_count / original_word_count if original_word_count > 0 else 0
         
         # Extract source information
+        self.logger.info("Start parallel extract source info")
         source_info = self._extract_source_info(chunks)
-        
+        self.logger.info("Finished parallel extract source info")
+
         return SummaryResult(
             summary=response.content,
             summary_type=summary_type,
@@ -158,19 +160,23 @@ class Summarizer:
     
     def _summarize_long_content(self, chunks: List[Dict[str, Any]], 
                                query: Optional[str] = None, **kwargs) -> SummaryResult:
-        """Summarize long content using hierarchical approach."""
-        self.logger.info("Using hierarchical summarization for long content")
+        """Summarize long content using hierarchical approach with parallel processing."""
+        from .batch_processor import BatchProcessor
+        
+        self.logger.info("Using parallel hierarchical summarization for long content")
         
         # Split chunks into groups
         chunk_groups = self._group_chunks(chunks, max_group_size=5)
         
-        # Summarize each group
-        intermediate_summaries = []
-        for i, group in enumerate(chunk_groups):
+        # Initialize batch processor for parallel processing
+        batch_processor = BatchProcessor(max_workers=min(4, len(chunk_groups)))
+        
+        def process_chunk_group(group: List[Dict[str, Any]], group_index: int) -> str:
+            """Process a single chunk group."""
             group_content = self._combine_chunks(group)
             
             # Create focused prompt for intermediate summary
-            instructions = f"Summarize the key points from this section (Part {i+1})."
+            instructions = f"Summarize the key points from this section (Part {group_index + 1})."
             if query:
                 instructions += f" Focus on information relevant to: {query}"
             
@@ -185,7 +191,10 @@ class Summarizer:
                 max_tokens=300
             )
             
-            intermediate_summaries.append(response.content)
+            return response.content
+        
+        # Process chunk groups in parallel while maintaining order
+        intermediate_summaries = batch_processor.process_batches(chunk_groups, process_chunk_group)
         
         # Combine intermediate summaries into final summary
         combined_intermediate = "\n\n".join([
@@ -197,24 +206,27 @@ class Summarizer:
         final_instructions = "Synthesize the following section summaries into a comprehensive final summary."
         if query:
             final_instructions += f" Focus on information relevant to: {query}"
-        
+        self.logger.info("Start build_summarization_prompt")
         final_messages = self.prompt_engineer.build_summarization_prompt(
             content=combined_intermediate,
             instructions=final_instructions
         )
-        
+        self.logger.info("Finished build_summarization_prompt")
+        self.logger.info("Start generate_response")
         final_response = self.llm_client.generate_response(
             final_messages,
             temperature=self.temperature,
             max_tokens=kwargs.get('max_tokens', 800)
         )
-        
+        self.logger.info("Finished generate_response")
         # Calculate metrics
         total_original_words = sum(len(chunk.get('text', '').split()) for chunk in chunks)
         summary_word_count = len(final_response.content.split())
         compression_ratio = summary_word_count / total_original_words if total_original_words > 0 else 0
         
+        self.logger.info("Start parallel extract source info")
         source_info = self._extract_source_info(chunks)
+        self.logger.info("Finished parallel extract source info")
         
         return SummaryResult(
             summary=final_response.content,
@@ -295,7 +307,44 @@ class Summarizer:
         return groups
     
     def _extract_source_info(self, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Extract source information from chunks."""
+        """Extract source information from chunks in parallel."""
+        from .batch_processor import BatchProcessor
+        
+        total_chunks = len(chunks)
+        if total_chunks < 100:  # Use regular processing for small number of chunks
+            return self._extract_source_info_sequential(chunks)
+        
+        # Initialize batch processor with appropriate number of workers
+        batch_processor = BatchProcessor(max_workers=min(4, total_chunks // 25))
+        
+        def process_chunk_metadata(chunk: Dict[str, Any], _: int) -> Dict[str, set]:
+            """Process metadata from a single chunk."""
+            metadata = chunk.get('metadata', {})
+            return {
+                'sources': {metadata['source']} if 'source' in metadata else set(),
+                'content_types': {metadata['content_type']} if 'content_type' in metadata else set()
+            }
+        
+        # Process chunks in parallel
+        chunk_results = batch_processor.process_batches(chunks, process_chunk_metadata)
+        
+        # Combine results
+        all_sources = set()
+        all_content_types = set()
+        
+        for result in chunk_results:
+            all_sources.update(result['sources'])
+            all_content_types.update(result['content_types'])
+        
+        return {
+            'sources': list(all_sources),
+            'content_types': list(all_content_types),
+            'total_chunks': total_chunks,
+            'has_web_content': any('web' in str(source).lower() for source in all_sources)
+        }
+        
+    def _extract_source_info_sequential(self, chunks: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Extract source information from chunks sequentially."""
         sources = set()
         content_types = set()
         total_chunks = len(chunks)
