@@ -131,21 +131,26 @@ class VectorDatabase:
         Raises:
             VectorDatabaseError: If addition fails
         """
+        from .batch_processor import VectorDatabaseBatchProcessor
+        
         if not texts:
             return []
         
         if len(texts) != len(metadata_list):
             raise VectorDatabaseError("Number of texts and metadata entries must match")
+            
+        # Initialize batch processor
+        batch_processor = VectorDatabaseBatchProcessor()
         
         try:
             if hasattr(self.embedding_generator, "has_model") and not self.embedding_generator.has_model():
                 raise VectorDatabaseError("No embedding model available. Configure OpenAI API key to enable embeddings.")
-            # Generate embeddings
-            self.logger.info(f"Generating embeddings for {len(texts)} texts")
-            embeddings = self.embedding_generator.generate_embeddings_batch(texts)
-            
-            # Convert to numpy array
-            embeddings_array = np.array(embeddings).astype('float32')
+            # Generate embeddings using batch processor
+            self.logger.info(f"Generating embeddings for {len(texts)} texts using batch processor")
+            embeddings_array = batch_processor.process_embeddings_batch(
+                texts,
+                self.embedding_generator.generate_embeddings_batch
+            ).astype('float32')
 
             # Check dimension mismatch between embeddings and index
             if embeddings_array.ndim != 2 or embeddings_array.shape[1] <= 0:

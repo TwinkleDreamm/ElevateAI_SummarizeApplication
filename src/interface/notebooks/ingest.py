@@ -17,22 +17,34 @@ from src.utils.logger import logger
 from src.interface.app_context import get_context
 
 
-def _process_file_to_text(tmp_path: Path) -> Optional[str]:
-    ctx = get_context()
+def _process_file_to_text(tmp_path: Path, processors: Dict[str, Any]) -> Optional[str]:
+    """Process a file to extract text using the provided processors.
+    
+    Args:
+        tmp_path: Path to the temporary file
+        processors: Dictionary of processors from the app context
+        
+    Returns:
+        Extracted text or None if processing fails
+    """
     file_extension = tmp_path.suffix.lower()
 
-    if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
-        audio_path = ctx["video_processor"].extract_audio(tmp_path)
-        transcript_result = ctx["speech_processor"].process(audio_path)
-        return transcript_result["text"]
-    elif file_extension in [".mp3", ".wav", ".m4a"]:
-        processed_audio = ctx["audio_processor"].process(tmp_path)
-        transcript_result = ctx["speech_processor"].process(processed_audio)
-        return transcript_result["text"]
-    elif file_extension in [".pdf", ".docx", ".txt"]:
-        return ctx["document_processor"].process(tmp_path)
-    else:
-        logger.warning(f"Unsupported file type: {file_extension}")
+    try:
+        if file_extension in [".mp4", ".avi", ".mov", ".mkv"]:
+            audio_path = processors["video_processor"].extract_audio(tmp_path)
+            transcript_result = processors["speech_processor"].process(audio_path)
+            return transcript_result["text"]
+        elif file_extension in [".mp3", ".wav", ".m4a"]:
+            processed_audio = processors["audio_processor"].process(tmp_path)
+            transcript_result = processors["speech_processor"].process(processed_audio)
+            return transcript_result["text"]
+        elif file_extension in [".pdf", ".docx", ".txt"]:
+            return processors["document_processor"].process(tmp_path)
+        else:
+            logger.warning(f"Unsupported file type: {file_extension}")
+            return None
+    except Exception as e:
+        logger.error(f"File processing failed for {tmp_path}: {str(e)}")
         return None
 
 
@@ -41,27 +53,55 @@ def ingest_uploaded_files(notebook_id: str, uploaded_files: List, *, clean_and_c
 
     Returns number of chunks added.
     """
+    from src.utils.batch_processor import BatchProcessor
+    
+    # Get app context once and reuse it
     ctx = get_context()
     added_chunks = 0
     processed_texts: List[Dict[str, Any]] = []
-
-    for file in uploaded_files or []:
+    
+    # Extract all needed processors from context to avoid thread issues
+    document_processor = ctx["document_processor"]
+    video_processor = ctx.get("video_processor")
+    audio_processor = ctx.get("audio_processor")
+    speech_processor = ctx.get("speech_processor")
+    
+    # Create a batch processor for parallel file processing
+    batch_processor = BatchProcessor(max_workers=min(4, len(uploaded_files)))
+    
+    def process_single_file(file):
+        # Create processors dictionary for thread-safe access
+        processors = {
+            "document_processor": document_processor,
+            "video_processor": video_processor,
+            "audio_processor": audio_processor,
+            "speech_processor": speech_processor
+        }
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.name).suffix) as tmp_file:
             tmp_file.write(file.read())
             tmp_path = Path(tmp_file.name)
         try:
-            text = _process_file_to_text(tmp_path)
-            if not text:
-                continue
-            processed_texts.append({
-                "text": text,
-                "source": file.name,
-                "type": file.type,
-                "notebook_id": notebook_id,
-            })
+            text = _process_file_to_text(tmp_path, processors)
+            if text:
+                return {
+                    "text": text,
+                    "source": file.name,
+                    "type": file.type,
+                    "notebook_id": notebook_id,
+                }
+            return None
         finally:
             if tmp_path.exists():
                 os.unlink(tmp_path)
+    
+    # Process files in parallel
+    results = batch_processor.process_items(uploaded_files or [], process_single_file)
+    
+    # Collect successful results
+    for result in results:
+        if result.success and result.result:
+            processed_texts.append(result.result)
 
     added_chunks += _commit_processed_texts(processed_texts)
     return added_chunks
