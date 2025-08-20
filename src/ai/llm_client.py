@@ -119,7 +119,7 @@ class LLMClient:
     
     def generate_response(self, messages: List[Dict[str, str]], **kwargs) -> LLMResponse:
         """
-        Generate response from LLM with memory integration.
+        Generate response from LLM with memory integration and parallel processing.
 
         Args:
             messages: List of message dictionaries with 'role' and 'content'
@@ -132,12 +132,38 @@ class LLMClient:
             LLMError: If generation fails
         """
         try:
+            from .batch_processor import BatchProcessor
             import time
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+            
             start_time = time.time()
-
-            # Enhance messages with memory context if requested
-            if kwargs.get('use_memory', True):
-                messages = self._enhance_with_memory(messages, **kwargs)
+            
+            # Create thread pool for parallel operations
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                # Parallel task 1: Enhance messages with memory (if enabled)
+                memory_future = None
+                if kwargs.get('use_memory', True):
+                    memory_future = executor.submit(self._enhance_with_memory, messages.copy(), **kwargs)
+                
+                # Parallel task 2: Pre-warm clients and validate messages
+                validation_future = executor.submit(self.validate_messages, messages)
+                
+                # Wait for memory enhancement if enabled
+                if memory_future:
+                    try:
+                        enhanced_messages = memory_future.result(timeout=2.0)  # 2 second timeout
+                        if enhanced_messages:
+                            messages = enhanced_messages
+                    except TimeoutError:
+                        self.logger.warning("Memory enhancement timed out, using original messages")
+                
+                # Check message validation
+                try:
+                    if not validation_future.result(timeout=1.0):
+                        raise LLMError("Invalid message format")
+                except TimeoutError:
+                    self.logger.warning("Message validation timed out, proceeding with generation")
 
             # Use Azure client if available
             if self.azure_client:
@@ -153,20 +179,21 @@ class LLMClient:
                     function_calls=None
                 )
 
-            # Store conversation in memory if enabled
+            # Store conversation in memory if enabled (non-blocking)
             if kwargs.get('store_in_memory', True) and len(messages) >= 2:
                 processing_time = time.time() - start_time
                 user_message = next((msg['content'] for msg in messages if msg['role'] == 'user'), '')
-
-                # Calculate confidence score based on response characteristics
                 confidence_score = self._calculate_confidence_score(response)
 
-                memory_manager.add_conversation_turn(
-                    user_input=user_message,
-                    assistant_response=response.content,
-                    context_used=kwargs.get('context_sources', []),
-                    processing_time=processing_time,
-                    confidence_score=confidence_score
+                # Use batch processor for memory operations
+                batch_processor = BatchProcessor(max_workers=2)
+                batch_processor.process_batches(
+                    [{'user_input': user_message,
+                      'assistant_response': response.content,
+                      'context_used': kwargs.get('context_sources', []),
+                      'processing_time': processing_time,
+                      'confidence_score': confidence_score}],
+                    lambda data, _: memory_manager.add_conversation_turn(**data)
                 )
 
             return response
