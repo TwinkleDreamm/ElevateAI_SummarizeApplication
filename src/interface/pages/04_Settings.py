@@ -8,8 +8,10 @@ from typing import Dict, Any
 import toml
 
 from src.interface.components import UIComponents
+from src.interface.app_context import get_context
 from src.utils.settings_manager import settings_manager, get_settings, set_setting
 from config.settings import settings
+from src.interface.utils.prompt_text import t
 
 
 def save_settings_to_session(settings_dict: Dict[str, Any]):
@@ -412,15 +414,12 @@ def render_advanced_settings():
 
 def main():
     """Main function for Settings page."""
-    st.set_page_config(
-        page_title="Settings - ElevateAI",
-        page_icon="⚙️",
-        layout="wide"
-    )
+    st.set_page_config(page_title="Settings - ElevateAI", page_icon="⚙️", layout="wide")
     
     # Header
-    st.title("⚙️ Settings")
-    st.markdown("Cấu hình các thông số cho ứng dụng ElevateAI")
+    lang = st.session_state.get('language', settings.default_language)
+    st.title("⚙️ " + ("Settings" if lang == "en" else "Cài đặt"))
+    st.markdown("Configure ElevateAI application" if lang == "en" else "Cấu hình các thông số cho ứng dụng ElevateAI")
     st.markdown("---")
     
     # Load current settings
@@ -632,9 +631,9 @@ def main():
         st.markdown("### 📊 Current Summary")
         summary = settings_manager.get_settings_summary()
         
-        for category, settings in summary.items():
+        for category, settings_map in summary.items():
             st.markdown(f"**{category.title()}:**")
-            for key, value in settings.items():
+            for key, value in settings_map.items():
                 if isinstance(value, bool):
                     display_value = "✅" if value else "❌"
                 else:

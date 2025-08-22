@@ -10,6 +10,10 @@ from src.interface.notebooks import store
 from src.interface.app_context import get_context
 from src.interface.utils.notebook_ui import NotebookUI
 from src.interface.notebooks.ingest import ingest_uploaded_files, ingest_url
+from pathlib import Path
+import json
+from typing import Dict, Any
+from PIL import Image
 
 
 class NotebookHelper:
@@ -204,3 +208,133 @@ class NotebookHelper:
         while len(questions) < 3:
             questions.append("Đưa ra phân tích chi tiết về một chủ đề cụ thể trong notebook.")
         return questions[:3]
+
+    # ===== Mindmap and file helpers =====
+    @staticmethod
+    def get_notebook_folder(notebook_id: str) -> Path:
+        p = Path("data/notebooks") / str(notebook_id)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @staticmethod
+    def get_latest_mindmap_path(notebook_id: str) -> Path:
+        return NotebookHelper.get_notebook_folder(notebook_id) / "mindmap_latest.png"
+
+    @staticmethod
+    def get_latest_mindmap_html_path(notebook_id: str) -> Path:
+        return NotebookHelper.get_notebook_folder(notebook_id) / "mindmap_latest.html"
+
+    @staticmethod
+    def extract_text_from_docx(docx_path: Path) -> str:
+        try:
+            from docx import Document  # type: ignore
+            doc = Document(str(docx_path))
+            paragraphs = [p.text.strip() for p in doc.paragraphs if p.text and p.text.strip()]
+            return "\n\n".join(paragraphs)
+        except Exception:
+            return ""
+
+    @staticmethod
+    def is_valid_image(img_path: Path) -> bool:
+        try:
+            if not img_path.exists() or img_path.stat().st_size == 0:
+                return False
+            with Image.open(str(img_path)) as im:
+                im.verify()
+            return True
+        except Exception:
+            return False
+
+    @staticmethod
+    def generate_mindmap_outline(summary_text: str, *, prompt_manager=None, llm_client=None) -> Dict[str, Any]:
+        # Heuristic fallback
+        def _heuristic_outline(text: str) -> Dict[str, Any]:
+            title = "Mindmap"
+            try:
+                first_line = next((ln.strip() for ln in (text or "").splitlines() if ln.strip()), "")
+                if first_line:
+                    title = first_line[:80]
+            except Exception:
+                pass
+            bullets = []
+            for ln in (text or "").splitlines():
+                s = ln.strip()
+                if s.startswith(("- ", "* ", "• ")):
+                    bullets.append(s[2:].strip())
+            children = [{"label": b, "children": []} for b in bullets[:20]]
+            return {"title": title or "Mindmap", "nodes": children}
+
+        if not summary_text or len(summary_text.strip()) < 10:
+            return _heuristic_outline(summary_text)
+
+        try:
+            if prompt_manager and llm_client:
+                instruction = (
+                    "Trích xuất MINDMAP dạng JSON từ nội dung sau. Trả về DUY NHẤT JSON hợp lệ theo schema: "
+                    "{\\\"title\\\": string, \\\"nodes\\\": [{\\\"label\\\": string, \\\"children\\\": [ ... ]}]}\. "
+                    "YÊU CẦU: 1) Label ngắn gọn ≤80 ký tự; 2) Nếu có ngày/địa điểm/trạng thái chèn trực tiếp vào label; "
+                    "3) Tối đa 3 cấp; 4) Tổng số nút ≤100; 5) Chỉ JSON thuần."
+                )
+                messages = (
+                    prompt_manager.build_generic_prompt(
+                        system_instruction=instruction,
+                        user_content=summary_text[:12000],
+                    ) if hasattr(prompt_manager, "build_generic_prompt") else [
+                        {"role": "system", "content": instruction},
+                        {"role": "user", "content": summary_text[:12000]},
+                    ]
+                )
+                resp = llm_client.generate_response(messages, max_tokens=1200, temperature=0.1)
+                content = resp.get("content", "") if isinstance(resp, dict) else getattr(resp, "content", "")
+                data = json.loads(content)
+                if isinstance(data, dict) and "nodes" in data:
+                    return data
+        except Exception:
+            pass
+        return _heuristic_outline(summary_text)
+
+    @staticmethod
+    def build_graphviz_from_outline(outline: Dict[str, Any]):
+        try:
+            import graphviz  # type: ignore
+            g = graphviz.Digraph(format="png")
+            g.attr(rankdir="LR", nodesep="0.3", ranksep="0.5")
+            g.node("root", outline.get("title", "Mindmap"), shape="box", style="rounded,filled", fillcolor="#EFF3FF")
+            node_id_counter = {"v": 0}
+            def add_nodes(parent_id: str, node: Dict[str, Any]):
+                node_id_counter["v"] += 1
+                nid = f"n{node_id_counter['v']}"
+                label = str(node.get("label", ""))[:80]
+                g.node(nid, label, shape="box", style="rounded")
+                g.edge(parent_id, nid)
+                for ch in node.get("children", [])[:20]:
+                    add_nodes(nid, ch)
+            for top in outline.get("nodes", [])[:30]:
+                add_nodes("root", top)
+            return g
+        except Exception:
+            return None
+
+    @staticmethod
+    def build_pyvis_from_outline(outline: Dict[str, Any], html_path: Path) -> bool:
+        try:
+            from pyvis.network import Network  # type: ignore
+            net = Network(height="600px", width="100%", directed=False, bgcolor="#FFFFFF")
+            net.barnes_hut()
+            net.add_node("root", label=outline.get("title", "Mindmap"), shape="box", color="#AEC7E8")
+            node_id_counter = {"v": 0}
+            def add_nodes(parent_id: str, node: Dict[str, Any]):
+                node_id_counter["v"] += 1
+                nid = f"n{node_id_counter['v']}"
+                label = str(node.get("label", ""))[:80]
+                net.add_node(nid, label=label, shape="box")
+                net.add_edge(parent_id, nid)
+                for ch in node.get("children", [])[:20]:
+                    add_nodes(nid, ch)
+            for top in outline.get("nodes", [])[:60]:
+                add_nodes("root", top)
+            net.set_options('{"physics": {"stabilization": true}}')
+            net.write_html(str(html_path), notebook=False)
+            return html_path.exists()
+        except Exception:
+            return False

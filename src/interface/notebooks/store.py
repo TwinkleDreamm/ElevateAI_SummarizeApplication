@@ -108,8 +108,8 @@ def list_notebooks(query: str = "", favorite_only: bool = False, date_from: Opti
         notebooks = [n for n in notebooks if n.created_at >= date_from]
     if date_to:
         notebooks = [n for n in notebooks if n.created_at <= date_to]
-    # Sort newest first
-    notebooks.sort(key=lambda n: n.updated_at or n.created_at, reverse=True)
+    # Sort by creation date first (most stable), then by update date
+    notebooks.sort(key=lambda n: (n.created_at, n.updated_at or n.created_at), reverse=True)
     return notebooks
 
 
