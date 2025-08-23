@@ -128,6 +128,11 @@ def _validate_agent(state: QAState) -> QAState:
 def _should_continue(state: QAState) -> str:
     confidence = state.get("confidence", 0.0)
     retries = state.get("max_retries", 0)
+    error = state.get("error", "")
+    
+    # Always end if there's an error to prevent infinite loops
+    if error:
+        return "end"
     
     # Hard stop conditions to prevent infinite loops
     if retries >= 2:

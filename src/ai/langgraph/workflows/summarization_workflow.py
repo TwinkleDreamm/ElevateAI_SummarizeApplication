@@ -18,23 +18,42 @@ class SummarizationState(TypedDict, total=False):
 
 def _chunk_node(state: SummarizationState) -> SummarizationState:
     content = state.get("content", "")
-    if not content:
-        return {"error": "missing content"}
+    if not content or not content.strip():
+        return {"error": "missing content", "chunks": []}
+    
     # naive chunking fallback (LangChain splitter can replace later)
     chunk_size = 1500
     chunks = [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)]
+    
+    # Filter out empty chunks
+    chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
+    
+    if not chunks:
+        return {"error": "no valid chunks created", "chunks": []}
+    
     return {"chunks": chunks}
 
 
 def _summary_node(state: SummarizationState) -> SummarizationState:
     llm_client = state.get("llm_client")
     prompt_manager = state.get("prompt_manager")
-    content = "\n\n".join(state.get("chunks", [])) or state.get("content", "")
+    chunks = state.get("chunks", [])
+    original_content = state.get("content", "")
+    
+    # Use chunks if available, otherwise fallback to original content
+    if chunks:
+        content = "\n\n".join(chunks)
+    else:
+        content = original_content
+    
     addl = state.get("additional_instructions", "")
     gen_max_tokens = int(state.get("max_tokens", 0)) or 1600
     
-    if not llm_client or not prompt_manager or not content:
-        return {"error": "missing llm_client/prompt_manager/content"}
+    if not llm_client or not prompt_manager:
+        return {"error": "missing llm_client/prompt_manager"}
+    
+    if not content or not content.strip():
+        return {"error": "missing content", "confidence": 0.0}
     
     try:
         messages = prompt_manager.build_summary_prompt(
@@ -72,12 +91,24 @@ def _summary_node(state: SummarizationState) -> SummarizationState:
 
 
 def _validate_node(state: SummarizationState) -> SummarizationState:
-    content = state.get("content", "")
+    # Get content from either chunks or original content
+    chunks = state.get("chunks", [])
+    original_content = state.get("content", "")
     summary = state.get("summary", "")
     
-    if not content or not summary:
+    # Determine which content to use for validation
+    if chunks:
+        content = "\n\n".join(chunks)
+    else:
+        content = original_content
+    
+    if not content or not content.strip():
         retries = state.get("max_retries", 0) + 1
-        return {"error": "missing content or summary", "confidence": 0.0, "max_retries": retries}
+        return {"error": "missing content", "confidence": 0.0, "max_retries": retries}
+    
+    if not summary or not summary.strip():
+        retries = state.get("max_retries", 0) + 1
+        return {"error": "missing summary", "confidence": 0.0, "max_retries": retries}
     
     try:
         cw = max(1, len(content.split()))
@@ -112,10 +143,16 @@ def _validate_node(state: SummarizationState) -> SummarizationState:
 def _should_continue(state: SummarizationState) -> str:
     confidence = state.get("confidence", 0.0)
     retries = state.get("max_retries", 0)
+    error = state.get("error", "")
+    
+    # Always end if there's an error to prevent infinite loops
+    if error:
+        return "end"
     
     # Always end after max retries to prevent infinite loops
     if retries >= 2:
         return "end"
+    
     if int(state.get("remaining_loops", 0)) <= 0:
         return "end"
     
