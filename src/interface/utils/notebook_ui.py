@@ -14,8 +14,8 @@ class NotebookUI:
         <style>
         .nb-chat-wrapper {{max-height: {max_height}px; overflow-y: auto; padding-right: 8px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin: 16px 0;}}
         .nb-chat-item {{margin: 10px 0; display: flex;}}
-        .nb-chat-q {{justify-content: flex-start;}}
-        .nb-chat-a {{justify-content: flex-end;}}
+        .nb-chat-q {{justify-content: flex-end;}}
+        .nb-chat-a {{justify-content: flex-start;}}
         .bubble {{max-width: 75%; padding: 10px 14px; border-radius: 12px;}}
         .q-bubble {{background:#eef2ff; border:1px solid #c7d2fe;}}
         .a-bubble {{background:#ecfdf5; border:1px solid #a7f3d0;}}

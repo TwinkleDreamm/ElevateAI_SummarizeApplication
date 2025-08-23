@@ -104,7 +104,7 @@ class EmbeddingGenerator:
     
     def generate_embedding(self, text: str, **kwargs) -> np.ndarray:
         """
-        Generate embedding for a single text.
+        Generate embedding for a single text with fallback mechanism.
         
         Args:
             text: Input text
@@ -119,22 +119,27 @@ class EmbeddingGenerator:
         if not text or not text.strip():
             raise EmbeddingError("Empty text provided for embedding")
         
-        try:
-            # Fix: Prioritize online models when available
-            if self.online_available and self.openai_client:
+        # Try OpenAI first if available
+        if self.online_available and self.openai_client:
+            try:
                 return self._generate_openai_embedding(text, **kwargs)
-            elif self.sentence_transformer:
+            except Exception as e:
+                self.logger.warning(f"OpenAI embedding failed, falling back to local model: {e}")
+                # Continue to fallback
+        
+        # Fallback to local model
+        if self.sentence_transformer:
+            try:
                 return self._generate_sentence_transformer_embedding(text, **kwargs)
-            else:
-                raise EmbeddingError("No embedding model available")
-                
-        except Exception as e:
-            self.logger.error(f"Embedding generation failed: {e}")
-            raise EmbeddingError(f"Embedding generation failed: {e}")
+            except Exception as e:
+                self.logger.error(f"Local embedding also failed: {e}")
+                raise EmbeddingError(f"All embedding methods failed: {e}")
+        else:
+            raise EmbeddingError("No embedding model available")
     
     def generate_embeddings_batch(self, texts: List[str], **kwargs) -> List[np.ndarray]:
         """
-        Generate embeddings for multiple texts in batch.
+        Generate embeddings for multiple texts in batch with fallback mechanism.
         
         Args:
             texts: List of input texts
@@ -149,18 +154,23 @@ class EmbeddingGenerator:
         if not texts:
             raise EmbeddingError("No texts provided for batch embedding")
         
-        try:
-            # Fix: Prioritize online models when available
-            if self.online_available and self.openai_client:
+        # Try OpenAI first if available
+        if self.online_available and self.openai_client:
+            try:
                 return self._generate_openai_embeddings_batch(texts, **kwargs)
-            elif self.sentence_transformer:
+            except Exception as e:
+                self.logger.warning(f"OpenAI batch embedding failed, falling back to local model: {e}")
+                # Continue to fallback
+        
+        # Fallback to local model
+        if self.sentence_transformer:
+            try:
                 return self._generate_sentence_transformer_embeddings_batch(texts, **kwargs)
-            else:
-                raise EmbeddingError("No embedding model available")
-                
-        except Exception as e:
-            self.logger.error(f"Batch embedding generation failed: {e}")
-            raise EmbeddingError(f"Batch embedding generation failed: {e}")
+            except Exception as e:
+                self.logger.error(f"Local batch embedding also failed: {e}")
+                raise EmbeddingError(f"All batch embedding methods failed: {e}")
+        else:
+            raise EmbeddingError("No embedding model available")
     
     def _generate_sentence_transformer_embedding(self, text: str, **kwargs) -> np.ndarray:
         """Generate embedding using sentence transformer."""
@@ -189,57 +199,129 @@ class EmbeddingGenerator:
             raise EmbeddingError(f"Sentence transformer batch embedding failed: {e}")
     
     def _generate_openai_embedding(self, text: str, **kwargs) -> np.ndarray:
-        """Generate embedding using OpenAI API."""
+        """Generate embedding using OpenAI API with retry mechanism."""
         import time
-        try:
-            # Fix: Use correct model name from settings
-            model_name = kwargs.get('model', self.embedding_model or 'text-embedding-ada-002')
-            
-            self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API (model: {model_name}, base_url: {self.openai_base_url})")
-            start_time = time.time()
-            response = self.openai_client.embeddings.create(
-                model=model_name,
-                input=text
-            )
-            elapsed = time.time() - start_time
-            self.logger.info(f"[EMBEDDING][ONLINE] Received result (elapsed: {elapsed:.2f}s)")
-            embedding = np.array(response.data[0].embedding)
-            
-            if kwargs.get('normalize', True):
-                embedding = embedding / np.linalg.norm(embedding)
-            
-            return embedding
-        except Exception as e:
-            self.logger.error(f"[EMBEDDING][ONLINE][ERROR] Error calling OpenAI embedding API: {e}")
-            raise EmbeddingError(f"OpenAI embedding failed: {e}")
-    
-    def _generate_openai_embeddings_batch(self, texts: List[str], **kwargs) -> List[np.ndarray]:
-        """Generate embeddings using OpenAI API in batch."""
-        import time
-        try:
-            # Fix: Use correct model name from settings
-            model_name = kwargs.get('model', self.embedding_model or 'text-embedding-ada-002')
-            
-            self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API batch (model: {model_name}, base_url: {self.openai_base_url}, batch_size: {len(texts)})")
-            start_time = time.time()
-            response = self.openai_client.embeddings.create(
-                model=model_name,
-                input=texts
-            )
-            elapsed = time.time() - start_time
-            self.logger.info(f"[EMBEDDING][ONLINE] Received batch result (elapsed: {elapsed:.2f}s)")
-            
-            embeddings = []
-            for data in response.data:
-                embedding = np.array(data.embedding)
+        import random
+        
+        max_retries = kwargs.get('max_retries', 3)
+        retry_delay = kwargs.get('retry_delay', 1.0)
+        
+        for attempt in range(max_retries):
+            try:
+                # Fix: Use correct model name from settings
+                model_name = kwargs.get('model', self.embedding_model or 'text-embedding-ada-002')
+                
+                # Validate input text
+                if not text or not text.strip():
+                    raise EmbeddingError("Empty or whitespace-only text provided for embedding")
+                
+                self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API (attempt {attempt + 1}/{max_retries}, model: {model_name}, base_url: {self.openai_base_url})")
+                start_time = time.time()
+                response = self.openai_client.embeddings.create(
+                    model=model_name,
+                    input=text
+                )
+                elapsed = time.time() - start_time
+                self.logger.info(f"[EMBEDDING][ONLINE] Received result (elapsed: {elapsed:.2f}s)")
+                
+                # Validate response
+                if not response or not response.data:
+                    raise EmbeddingError("No embedding data received from OpenAI API")
+                
+                if len(response.data) == 0:
+                    raise EmbeddingError("Empty embedding data received from OpenAI API")
+                
+                embedding_data = response.data[0]
+                if not embedding_data or not embedding_data.embedding:
+                    raise EmbeddingError("No embedding vector in response data")
+                
+                embedding = np.array(embedding_data.embedding)
+                
+                # Validate embedding vector
+                if embedding.size == 0:
+                    raise EmbeddingError("Empty embedding vector received")
+                
                 if kwargs.get('normalize', True):
                     embedding = embedding / np.linalg.norm(embedding)
-                embeddings.append(embedding)
-            
-            return embeddings
-        except Exception as e:
-            self.logger.error(f"[EMBEDDING][ONLINE][ERROR] Error calling OpenAI embedding API batch: {e}")
-            raise EmbeddingError(f"OpenAI batch embedding failed: {e}")
+                
+                return embedding
+                
+            except Exception as e:
+                self.logger.warning(f"[EMBEDDING][ONLINE][RETRY] Attempt {attempt + 1}/{max_retries} failed: {e}")
+                
+                if attempt < max_retries - 1:
+                    # Add jitter to avoid thundering herd
+                    delay = retry_delay * (2 ** attempt) + random.uniform(0, 1)
+                    self.logger.info(f"[EMBEDDING][ONLINE][RETRY] Waiting {delay:.2f}s before retry...")
+                    time.sleep(delay)
+                else:
+                    self.logger.error(f"[EMBEDDING][ONLINE][ERROR] All {max_retries} attempts failed. Last error: {e}")
+                    raise EmbeddingError(f"OpenAI embedding failed after {max_retries} attempts: {e}")
+    
+    def _generate_openai_embeddings_batch(self, texts: List[str], **kwargs) -> List[np.ndarray]:
+        """Generate embeddings using OpenAI API in batch with retry mechanism."""
+        import time
+        import random
+        
+        max_retries = kwargs.get('max_retries', 3)
+        retry_delay = kwargs.get('retry_delay', 1.0)
+        
+        for attempt in range(max_retries):
+            try:
+                # Fix: Use correct model name from settings
+                model_name = kwargs.get('model', self.embedding_model or 'text-embedding-ada-002')
+                
+                # Validate input texts
+                if not texts:
+                    raise EmbeddingError("Empty text list provided for batch embedding")
+                
+                # Filter out empty texts
+                valid_texts = [text for text in texts if text and text.strip()]
+                if not valid_texts:
+                    raise EmbeddingError("No valid texts provided for batch embedding")
+                
+                self.logger.info(f"[EMBEDDING][ONLINE] Calling OpenAI embedding API batch (attempt {attempt + 1}/{max_retries}, model: {model_name}, base_url: {self.openai_base_url}, batch_size: {len(valid_texts)})")
+                start_time = time.time()
+                response = self.openai_client.embeddings.create(
+                    model=model_name,
+                    input=valid_texts
+                )
+                elapsed = time.time() - start_time
+                self.logger.info(f"[EMBEDDING][ONLINE] Received batch result (elapsed: {elapsed:.2f}s)")
+                
+                # Validate response
+                if not response or not response.data:
+                    raise EmbeddingError("No embedding data received from OpenAI API batch")
+                
+                if len(response.data) != len(valid_texts):
+                    raise EmbeddingError(f"Mismatch in response data length: expected {len(valid_texts)}, got {len(response.data)}")
+                
+                embeddings = []
+                for i, data in enumerate(response.data):
+                    if not data or not data.embedding:
+                        raise EmbeddingError(f"No embedding vector in response data at index {i}")
+                    
+                    embedding = np.array(data.embedding)
+                    if embedding.size == 0:
+                        raise EmbeddingError(f"Empty embedding vector received at index {i}")
+                    
+                    if kwargs.get('normalize', True):
+                        embedding = embedding / np.linalg.norm(embedding)
+                    embeddings.append(embedding)
+                
+                return embeddings
+                
+            except Exception as e:
+                self.logger.warning(f"[EMBEDDING][ONLINE][RETRY] Batch attempt {attempt + 1}/{max_retries} failed: {e}")
+                
+                if attempt < max_retries - 1:
+                    # Add jitter to avoid thundering herd
+                    delay = retry_delay * (2 ** attempt) + random.uniform(0, 1)
+                    self.logger.info(f"[EMBEDDING][ONLINE][RETRY] Waiting {delay:.2f}s before retry...")
+                    time.sleep(delay)
+                else:
+                    self.logger.error(f"[EMBEDDING][ONLINE][ERROR] All {max_retries} batch attempts failed. Last error: {e}")
+                    raise EmbeddingError(f"OpenAI batch embedding failed after {max_retries} attempts: {e}")
     
     def get_embedding_dimension(self) -> int:
         """

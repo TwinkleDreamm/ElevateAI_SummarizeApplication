@@ -54,6 +54,8 @@ class Notebook:
     sources: List[SourceRef] = field(default_factory=list)
     examples: List[str] = field(default_factory=list)
     overview: str = ""
+    # Hash of sources used to generate overview/examples to avoid unnecessary regeneration
+    generated_hash: str = ""
 
 
 def _load_all() -> List[Notebook]:
@@ -76,6 +78,7 @@ def _load_all() -> List[Notebook]:
                 sources=sources,
                 examples=item.get("examples", []),
                 overview=item.get("overview", ""),
+                generated_hash=item.get("generated_hash", ""),
             )
             notebooks.append(nb)
         return notebooks
@@ -105,8 +108,8 @@ def list_notebooks(query: str = "", favorite_only: bool = False, date_from: Opti
         notebooks = [n for n in notebooks if n.created_at >= date_from]
     if date_to:
         notebooks = [n for n in notebooks if n.created_at <= date_to]
-    # Sort newest first
-    notebooks.sort(key=lambda n: n.updated_at or n.created_at, reverse=True)
+    # Sort by creation date first (most stable), then by update date
+    notebooks.sort(key=lambda n: (n.created_at, n.updated_at or n.created_at), reverse=True)
     return notebooks
 
 
@@ -253,5 +256,17 @@ def get_overview(notebook_id: str) -> Optional[str]:
         if n.id == notebook_id:
             return n.overview
     return None
+
+
+def update_generated_hash(notebook_id: str, generated_hash: str) -> bool:
+    """Persist the hash representing the sources used for the latest generation."""
+    notebooks = _load_all()
+    for n in notebooks:
+        if n.id == notebook_id:
+            n.generated_hash = generated_hash
+            n.updated_at = _now_iso()
+            _save_all(notebooks)
+            return True
+    return False
 
 

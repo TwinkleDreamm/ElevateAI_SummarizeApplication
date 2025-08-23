@@ -99,7 +99,7 @@ class WebSearchEngine:
                 urls.extend(self._google_library_search(query, **kwargs))
             
             # Fallback to SerpAPI if available
-            elif settings.serpapi_api_key:
+            if settings.serpapi_api_key:
                 urls.extend(self._serpapi_search(query, **kwargs))
             
             else:

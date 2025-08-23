@@ -58,7 +58,7 @@ class SpeechToTextProcessor(BaseProcessor):
         
         try:
             # Choose STT method based on availability and configuration
-            use_openai = kwargs.get('use_openai_api', False)
+            use_openai = kwargs.get('use_openai_api', True)
             
             if use_openai and OPENAI_AVAILABLE and self.settings.openai_api_key:
                 result = self._transcribe_with_openai_api(audio_path, **kwargs)

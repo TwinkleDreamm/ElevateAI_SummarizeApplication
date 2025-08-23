@@ -32,6 +32,13 @@ class Settings:
         self.openai_base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.openai_embedding_model = os.getenv("OPENAI_EMBEDDING_MODEL")
         self.openai_chat_model = os.getenv("OPENAI_CHAT_MODEL")
+        
+        # OpenAI Model Parameters
+        self.openai_temperature = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+        self.openai_max_tokens = int(os.getenv("OPENAI_MAX_TOKENS", "2000"))
+        self.openai_top_p = float(os.getenv("OPENAI_TOP_P", "0.9"))
+        self.openai_frequency_penalty = float(os.getenv("OPENAI_FREQUENCY_PENALTY", "0.0"))
+        self.openai_presence_penalty = float(os.getenv("OPENAI_PRESENCE_PENALTY", "0.0"))
 
         # Google Search API
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -44,7 +51,12 @@ class Settings:
         self.max_file_size_mb = int(os.getenv("MAX_FILE_SIZE_MB", "500"))
         self.supported_video_formats = ["mp4", "avi", "mov", "mkv", "webm"]
         self.supported_audio_formats = ["mp3", "wav", "m4a", "flac", "ogg"]
-        self.supported_document_formats = ["pdf", "docx", "txt"]
+        self.supported_document_formats = ["pdf", "docx", "txt", "xlsx"]
+
+        # Document extraction performance/caching
+        self.enable_extract_cache = os.getenv("ENABLE_EXTRACT_CACHE", "True").lower() == "true"
+        # Consider PDFs larger than this size (MB) as large; prefer PyMuPDF when available
+        self.pdf_large_file_size_mb = int(os.getenv("PDF_LARGE_FILE_SIZE_MB", "15"))
 
         # Vector Database Settings
         self.vector_db_path = os.getenv("VECTOR_DB_PATH", "./data/vectordb")
@@ -57,18 +69,34 @@ class Settings:
         self.similarity_threshold = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
         self.max_web_search_results = int(os.getenv("MAX_WEB_SEARCH_RESULTS", "5"))
         self.rerank_top_k = int(os.getenv("RERANK_TOP_K", "5"))
+        self.max_results = int(os.getenv("MAX_RESULTS", "10"))
+        self.enable_web_search = os.getenv("ENABLE_WEB_SEARCH", "False").lower() == "true"
+        self.enable_function_calling = os.getenv("ENABLE_FUNCTION_CALLING", "False").lower() == "true"
 
         # Audio Processing Settings
         self.audio_sample_rate = int(os.getenv("AUDIO_SAMPLE_RATE", "16000"))
         self.noise_reduction_strength = float(os.getenv("NOISE_REDUCTION_STRENGTH", "0.8"))
         self.vocal_separation_model = os.getenv("VOCAL_SEPARATION_MODEL", "spleeter:2stems-16kHz")
+        self.enable_tts = os.getenv("ENABLE_TTS", "True").lower() == "true"
+        self.tts_voice = os.getenv("TTS_VOICE", "alloy")
+        self.enable_vocal_separation = os.getenv("ENABLE_VOCAL_SEPARATION", "False").lower() == "true"
 
         # Language Settings
         self.default_language = os.getenv("DEFAULT_LANGUAGE", "vi")
         self.supported_languages = ["vi", "en", "zh", "ja", "ko"]
         
+        # Interface Settings
+        self.theme = os.getenv("THEME", "light")
+        self.auto_save = os.getenv("AUTO_SAVE", "True").lower() == "true"
+        self.show_processing_time = os.getenv("SHOW_PROCESSING_TIME", "True").lower() == "true"
+        self.show_confidence_score = os.getenv("SHOW_CONFIDENCE_SCORE", "True").lower() == "true"
+        self.enable_animations = os.getenv("ENABLE_ANIMATIONS", "True").lower() == "true"
+        
         # Performance Settings
         self.disable_nltk_downloads = os.getenv("DISABLE_NLTK_DOWNLOADS", "True").lower() == "true"
+        self.cache_enabled = os.getenv("CACHE_ENABLED", "True").lower() == "true"
+        self.enable_metrics = os.getenv("ENABLE_METRICS", "True").lower() == "true"
+        self.backup_enabled = os.getenv("BACKUP_ENABLED", "True").lower() == "true"
 
     def _load_env_file(self):
         """Load environment variables from .env file."""
