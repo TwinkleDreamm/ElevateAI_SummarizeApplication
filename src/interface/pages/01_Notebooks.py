@@ -24,6 +24,7 @@ from src.interface.utils.prompt_text import (
     MINDMAP_SUMMARY_VI,
     MINDMAP_JSON_INSTRUCTION_VI,
     NO_RESULTS_SYSTEM_VI,
+    OVERVIEW_CONCISE_INSTRUCTION,
     t,
     ts,
 )
@@ -718,7 +719,7 @@ def _generate_example_questions_from_summary(summary: str, *, prompt_manager=Non
     ]
 
 
-def _background_generate_overview_and_examples(notebook_id: str, overview_task_key: str, examples_task_key: str) -> None:
+def _background_generate_overview_and_examples(notebook_id: str, overview_task_key: str, examples_task_key: str, lang: str = "vi") -> None:
     """Worker: generate text overview and example questions using LangChain without blocking UI."""
     try:
         from src.interface.app_context import _build_context as _build_isolated_ctx  # type: ignore
@@ -731,16 +732,21 @@ def _background_generate_overview_and_examples(notebook_id: str, overview_task_k
         )
         logger.info(f"[StudioOverview] (TEXT) Collected text length: {len(full_text)}")
 
-        # Generate overview via LangGraph/LLM
+        # Generate overview via LangGraph/LLM (follow UI language)
+        try:
+            lang_code = (lang or "vi").split("-")[0].lower()
+        except Exception:
+            lang_code = "vi"
+        overview_instruction = (
+            OVERVIEW_CONCISE_INSTRUCTION.get(lang_code)
+            or OVERVIEW_CONCISE_INSTRUCTION.get("en")
+            or OVERVIEW_CONCISE_INSTRUCTION.get("vi")
+        )
         summary = _run_langgraph_summary(
             full_text,
             prompt_manager=ctx.get("prompt_manager"),
             llm_client=ctx.get("llm_client"),
-            additional_instructions=(
-                "Viết một bản tổng quan ngắn gọn bằng tiếng Việt, độ dài khoảng 150–250 từ. "
-                "Cấu trúc: 1–2 câu mở đầu rất ngắn; sau đó các gạch đầu dòng nêu 4–6 ý chính; "
-                "có thể thêm 1 đoạn ngắn kết luận nếu cần. Ngắn gọn, rõ ràng, tránh chi tiết thừa."
-            ),
+            additional_instructions=overview_instruction,
             max_tokens=600,
         )
         if not summary or not summary.strip():
@@ -758,10 +764,9 @@ def _background_generate_overview_and_examples(notebook_id: str, overview_task_k
             pass
         _TASK_STATUS[overview_task_key] = {"running": False, "result": summary, "error": None}
 
-        # Detect language from content to guide examples
+        # Use selected UI language for examples
         try:
-            vi_chars = sum(ch in VI_CHAR_SET for ch in (full_text or "").lower())
-            target_lang = "vi" if vi_chars > 0 else "en"
+            target_lang = (lang or "vi").split("-")[0]
         except Exception:
             target_lang = "vi"
 
@@ -777,11 +782,103 @@ def _background_generate_overview_and_examples(notebook_id: str, overview_task_k
         except Exception:
             pass
         _TASK_STATUS[examples_task_key] = {"running": False, "result": questions, "error": None}
-        logger.info(f"[StudioOverview] (TEXT) Overview and examples generated for notebook {notebook_id}")
     except Exception as e:
         _TASK_STATUS[overview_task_key] = {"running": False, "result": None, "error": str(e)}
         _TASK_STATUS[examples_task_key] = {"running": False, "result": None, "error": str(e)}
         logger.error(f"[StudioOverview] (TEXT) Failed: {e}")
+
+def _background_generate_overview_only(notebook_id: str, overview_task_key: str, lang: str = "vi") -> None:
+    """Worker: generate only the text overview, respecting UI language."""
+    try:
+        from src.interface.app_context import _build_context as _build_isolated_ctx  # type: ignore
+        ctx = _build_isolated_ctx()
+        full_text = _collect_notebook_texts(
+            notebook_id,
+            vector_db=ctx.get("vector_db"),
+            search_engine=ctx.get("search_engine"),
+        )
+        try:
+            lang_code = (lang or "vi").split("-")[0].lower()
+        except Exception:
+            lang_code = "vi"
+        instr = (
+            OVERVIEW_CONCISE_INSTRUCTION.get(lang_code)
+            or OVERVIEW_CONCISE_INSTRUCTION.get("en")
+            or OVERVIEW_CONCISE_INSTRUCTION.get("vi")
+        )
+        summary = _run_langgraph_summary(
+            full_text,
+            prompt_manager=ctx.get("prompt_manager"),
+            llm_client=ctx.get("llm_client"),
+            additional_instructions=instr,
+            max_tokens=600,
+        )
+        if not summary or not summary.strip():
+            nb = None
+            try:
+                nb = store.get_notebook(notebook_id)
+            except Exception:
+                pass
+            summary = (getattr(nb, "description", None) or full_text or "").strip()[:4000]
+        try:
+            store.update_overview(notebook_id, summary)
+        except Exception:
+            pass
+        _TASK_STATUS[overview_task_key] = {"running": False, "result": summary, "error": None}
+    except Exception as e:
+        _TASK_STATUS[overview_task_key] = {"running": False, "result": None, "error": str(e)}
+        logger.error(f"[StudioOverview] (TEXT-overview) Failed: {e}")
+
+def _background_generate_examples_only(notebook_id: str, examples_task_key: str, lang: str = "vi") -> None:
+    """Worker: generate only example questions based on existing or freshly built summary."""
+    try:
+        from src.interface.app_context import _build_context as _build_isolated_ctx  # type: ignore
+        ctx = _build_isolated_ctx()
+        # Prefer existing overview
+        summary = store.get_overview(notebook_id)
+        if not summary or not summary.strip():
+            # Fallback: collect and generate a brief summary first
+            full_text = _collect_notebook_texts(
+                notebook_id,
+                vector_db=ctx.get("vector_db"),
+                search_engine=ctx.get("search_engine"),
+            )
+            # Use concise profile according to language
+            try:
+                lang_code = (lang or "vi").split("-")[0].lower()
+            except Exception:
+                lang_code = "vi"
+            instr = (
+                OVERVIEW_CONCISE_INSTRUCTION.get(lang_code)
+                or OVERVIEW_CONCISE_INSTRUCTION.get("en")
+                or OVERVIEW_CONCISE_INSTRUCTION.get("vi")
+            )
+            summary = _run_langgraph_summary(
+                full_text,
+                prompt_manager=ctx.get("prompt_manager"),
+                llm_client=ctx.get("llm_client"),
+                additional_instructions=instr,
+                max_tokens=600,
+            )
+        # Target language for examples follows UI selection
+        try:
+            target_lang = (lang or "vi").split("-")[0]
+        except Exception:
+            target_lang = "vi"
+        questions = _generate_example_questions_from_summary(
+            summary or "",
+            prompt_manager=ctx.get("prompt_manager"),
+            llm_client=ctx.get("llm_client"),
+            target_lang=target_lang,
+        )
+        try:
+            store.update_examples(notebook_id, questions)
+        except Exception:
+            pass
+        _TASK_STATUS[examples_task_key] = {"running": False, "result": questions, "error": None}
+    except Exception as e:
+        _TASK_STATUS[examples_task_key] = {"running": False, "result": None, "error": str(e)}
+        logger.error(f"[StudioOverview] (TEXT-examples) Failed: {e}")
 
 def _cleanup_old_overview_files(notebook_id: str, keep_latest: int = 1) -> dict[str, int]:
     """Clean up old overview files, keeping only the latest ones per type."""
@@ -1461,7 +1558,7 @@ def _notebook_overview(nb: store.Notebook):
                 _TASK_STATUS[examples_task_key] = {"running": True, "result": None, "error": None}
                 threading.Thread(
                     target=_background_generate_overview_and_examples,
-                    args=(nb.id, overview_task_key, examples_task_key),
+                    args=(nb.id, overview_task_key, examples_task_key, _get_lang()),
                     daemon=True,
                 ).start()
             # Show placeholders while background tasks run
@@ -1475,6 +1572,33 @@ def _notebook_overview(nb: store.Notebook):
             examples = stored_examples
         
         st.write(overview)
+
+        # Manual refresh controls for Overview and Example questions
+        ctrl_col1, ctrl_col2 = st.columns([1, 1])
+        ov_state = _TASK_STATUS.get(overview_task_key, {"running": False, "error": None})
+        ex_state = _TASK_STATUS.get(examples_task_key, {"running": False, "error": None})
+        with ctrl_col1:
+            ov_label = (t("creating_overview", _get_lang()) if ov_state.get("running") else t("refresh_overview", _get_lang()))
+            if st.button(ov_label, key=f"refresh_overview_{nb.id}", disabled=ov_state.get("running", False)):
+                _TASK_STATUS[overview_task_key] = {"running": True, "result": None, "error": None}
+                threading.Thread(
+                    target=_background_generate_overview_only,
+                    args=(nb.id, overview_task_key, _get_lang()),
+                    daemon=True,
+                ).start()
+            if ov_state.get("error"):
+                st.error(f"{t('error', _get_lang())}: {ov_state['error']}")
+        with ctrl_col2:
+            ex_label = (t("creating_examples", _get_lang()) if ex_state.get("running") else t("refresh_examples", _get_lang()))
+            if st.button(ex_label, key=f"refresh_examples_{nb.id}", disabled=ex_state.get("running", False)):
+                _TASK_STATUS[examples_task_key] = {"running": True, "result": None, "error": None}
+                threading.Thread(
+                    target=_background_generate_examples_only,
+                    args=(nb.id, examples_task_key, _get_lang()),
+                    daemon=True,
+                ).start()
+            if ex_state.get("error"):
+                st.error(f"{t('error', _get_lang())}: {ex_state['error']}")
         
         # Show cache status
         if not needs_regeneration:
@@ -2090,6 +2214,11 @@ def _render_create_view():
             st.rerun()
             return
     else:
+        # Entering create mode: ensure any previous creating flag is cleared
+        try:
+            st.session_state.pop('creating_notebook', None)
+        except Exception:
+            pass
         st.title(t("create_notebook", _get_lang()))
 
     with st.form("create_notebook_form"):
@@ -2112,7 +2241,13 @@ def _render_create_view():
             accept_multiple_files=True,
         )
         url = st.text_input(t("field_add_link", _get_lang()))
-        submitted = st.form_submit_button(t("btn_save", _get_lang()) if is_edit_mode else t("btn_create", _get_lang()), type="primary")
+        # Disable the Create button when creating a new notebook and a submission is in progress
+        create_disabled = (not is_edit_mode) and st.session_state.get('creating_notebook', False)
+        submitted = st.form_submit_button(
+            t("btn_save", _get_lang()) if is_edit_mode else t("btn_create", _get_lang()),
+            type="primary",
+            disabled=create_disabled,
+        )
 
     if submitted:
         if not name.strip():
@@ -2132,6 +2267,8 @@ def _render_create_view():
             st.query_params["view"] = "notebook"
             st.rerun()
         else:
+            # Mark creating state to prevent multiple clicks
+            st.session_state['creating_notebook'] = True
             nb = store.create_notebook(name=name.strip(), description=desc.strip(), tags=[t.strip() for t in tags.split(',') if t.strip()])
             added = 0
             if uploaded:
@@ -2149,6 +2286,8 @@ def _render_create_view():
 
     if st.button(t("back_to_notebooks", _get_lang())):
         st.session_state.pop("edit_notebook_id", None)
+        # Clear creating flag when navigating away
+        st.session_state.pop('creating_notebook', None)
         st.query_params["view"] = "list"
         st.rerun()
 

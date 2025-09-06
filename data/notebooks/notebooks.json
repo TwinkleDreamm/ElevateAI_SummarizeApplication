@@ -1,0 +1,28 @@
+[
+  {
+    "id": "103b381a-5479-4bd1-a897-15587889009a",
+    "name": "DEMO",
+    "created_at": "2025-09-06T06:44:05.121072",
+    "updated_at": "2025-09-06T06:44:38.425120",
+    "is_favorite": false,
+    "description": "",
+    "tags": [],
+    "sources": [
+      {
+        "id": "34fd365b-bd98-4d4e-8157-e06504f1b959",
+        "type": "file",
+        "title": "CDT paper.pdf",
+        "source_path_or_url": "CDT paper.pdf",
+        "added_at": "2025-09-06T06:44:30.505870",
+        "meta": {}
+      }
+    ],
+    "examples": [
+      "What are the key differences between static code analysis and dynamic analysis as discussed in the paper?",
+      "How does the use of an Abstract Syntax Tree (AST) enhance the process of source code analysis in the proposed model?",
+      "In what ways does the automated indexing service improve performance when managing large codebases in the context of the C/C++ code analyzer?"
+    ],
+    "overview": "This paper presents a model for static source code analysis aimed at building a C/C++ code analyzer, utilizing the open-source CDT (C/C++ Development Tooling) components.\n\n- **Static Code Analysis**: The methodology focuses on analyzing source code without executing it, contrasting with dynamic analysis.\n- **CDT Overview**: The paper details the CDT parser and indexing service, which are integral to the analysis process.\n- **General Model**: A model is introduced where source code is parsed to generate an Abstract Syntax Tree (AST), facilitating information extraction.\n- **Indexing Service**: The model employs an automated indexing service to manage large codebases efficiently, enhancing performance.\n- **Parser Functionality**: The parser converts source code into tokens and constructs an AST, which simplifies the search for functions and variables.\n- **Binding Resolution**: The process of resolving identifiers in the code is explained, highlighting its importance for features like code navigation.\n\nIn conclusion, the development of this static code analyzer can lead to significant advancements in integrated development environments (IDEs) and code metrics tools, emphasizing the need for performance optimization in large projects.",
+    "generated_hash": ""
+  }
+]

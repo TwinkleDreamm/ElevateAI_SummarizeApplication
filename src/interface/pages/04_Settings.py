@@ -12,12 +12,22 @@ from src.interface.app_context import get_context
 from src.utils.settings_manager import settings_manager, get_settings, set_setting
 from config.settings import settings
 from src.interface.utils.prompt_text import UI_TEXTS, SETTINGS_TEXTS, ts, t
+from src.utils.logger import logger
 
 
 def _get_lang() -> str:
     try:
-        return st.session_state.get('language', settings.default_language)
-    except Exception:
+        lang = st.session_state.get('language', settings.default_language)
+        try:
+            logger.info(f"[SettingsPage] _get_lang -> {lang}")
+        except Exception:
+            pass
+        return lang
+    except Exception as e:
+        try:
+            logger.warning(f"[SettingsPage] _get_lang failed: {e}; fallback 'vi'")
+        except Exception:
+            pass
         return 'vi'
 
 

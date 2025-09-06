@@ -136,6 +136,32 @@ NO_RESULTS_SYSTEM_KO: str = (
     "노트북 자동 생성 가능하다고 약속하지 마세요."
 )
 
+# ===== Overview concise instructions (vi/en/zh/ja/ko) =====
+OVERVIEW_CONCISE_INSTRUCTION = {
+    "vi": (
+        "Viết một bản tổng quan ngắn gọn bằng tiếng Việt, độ dài khoảng 150–250 từ. "
+        "Cấu trúc: 1–2 câu mở đầu rất ngắn; sau đó các gạch đầu dòng nêu 4–6 ý chính; "
+        "có thể thêm 1 đoạn ngắn kết luận nếu cần. Ngắn gọn, rõ ràng, tránh chi tiết thừa."
+    ),
+    "en": (
+        "Write a concise overview in English, about 150–250 words. "
+        "Structure: 1–2 very short intro sentences; then bullet points listing 4–6 key points; "
+        "optionally a short concluding paragraph. Be concise, clear, avoid unnecessary details."
+    ),
+    "zh": (
+        "用中文撰写一份精炼的概览（约150–250字）。结构：1–2句极简开场；随后用要点列出4–6个关键信息；"
+        "如有需要可添加简短结语。语言简洁清晰，避免冗余细节。"
+    ),
+    "ja": (
+        "日本語で150〜250語程度の簡潔な概要を書いてください。構成：非常に短い導入文1〜2文；"
+        "続いて4〜6の要点を箇条書き；必要に応じて短い結語。簡潔かつ明瞭に、不要な詳細は避けてください。"
+    ),
+    "ko": (
+        "한국어로 150–250단어 분량의 간결한 개요를 작성하세요. 구성: 매우 짧은 도입 1–2문장; "
+        "이어 4–6개의 핵심 포인트를 불릿으로; 필요 시 짧은 결론 단락. 간결하고 명확하게, 불필요한 세부는 피하세요."
+    ),
+}
+
 # ===== UI Text Registry (vi/en/zh/ja/ko) =====
 UI_TEXTS = {
     # Generic
@@ -209,6 +235,8 @@ UI_TEXTS = {
     "overview_examples": {"vi": "📘 Tổng quan & Câu hỏi ví dụ", "en": "📘 Overview & Example questions", "zh": "📘 概览与示例问题", "ja": "📘 概要と例示質問", "ko": "📘 개요 및 예시 질문"},
     "overview": {"vi": "Tổng quan", "en": "Overview", "zh": "概览", "ja": "概要", "ko": "개요"},
     "examples": {"vi": "Câu hỏi ví dụ", "en": "Example questions", "zh": "示例问题", "ja": "例示質問", "ko": "예시 질문"},
+    "refresh_overview": {"vi": "🔄 Làm mới Tổng quan", "en": "🔄 Refresh Overview", "zh": "🔄 刷新概览", "ja": "🔄 概要を更新", "ko": "🔄 개요 새로고침"},
+    "refresh_examples": {"vi": "🔄 Làm mới Câu hỏi ví dụ", "en": "🔄 Refresh Example questions", "zh": "🔄 刷新示例问题", "ja": "🔄 例示質問を更新", "ko": "🔄 예시 질문 새로고침"},
     "cached_overview_examples": {"vi": "📝 Overview và Examples đã được lưu cache", "en": "📝 Overview and Examples are cached", "zh": "📝 概览与示例已缓存", "ja": "📝 概要と例がキャッシュされています", "ko": "📝 개요와 예시가 캐시되었습니다"},
     "creating_overview": {"vi": "Đang tạo overview...", "en": "Creating overview...", "zh": "正在生成概览...", "ja": "概要を生成中...", "ko": "개요 생성 중..."},
     "creating_examples": {"vi": "Đang tạo câu hỏi ví dụ...", "en": "Generating example questions...", "zh": "正在生成示例问题...", "ja": "例示質問を生成中...", "ko": "예시 질문 생성 중..."},
