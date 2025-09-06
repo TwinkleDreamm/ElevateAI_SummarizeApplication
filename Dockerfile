@@ -48,7 +48,8 @@ RUN useradd -ms /bin/bash appuser \
 USER appuser
 
 # Expose the local default Streamlit port (Cloud Run ignores EXPOSE and uses $PORT)
-EXPOSE 8501
+ENV PORT=8080
+EXPOSE 8080
 
 # Cloud Run will inject $PORT; start_app.py defaults to 8501 locally and binds 0.0.0.0
 CMD ["bash", "-lc", "python -u start_app.py"]

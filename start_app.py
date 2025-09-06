@@ -39,10 +39,11 @@ def start_streamlit_app():
         cmd = [
             sys.executable, "-m", "streamlit", "run", 
             str(app_path),
-            "--server.port=8501",
+            "--server.port=8080",
             "--server.address=0.0.0.0",
             "--browser.gatherUsageStats=false"
         ]
+
         
         subprocess.run(cmd)
         
